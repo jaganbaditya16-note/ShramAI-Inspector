@@ -9,6 +9,8 @@ class Settings(BaseSettings):
     allowed_origins: str = "http://localhost:3000"
     demo_auth_token: str = ""
     max_request_body_mb: int = Field(default=30, ge=1, le=100)
+    ollama_base_url: str = "http://localhost:11434"
+    ollama_model: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
