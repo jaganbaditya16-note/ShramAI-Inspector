@@ -1,16 +1,16 @@
 # API
 
-FastAPI service boundary.
+FastAPI backend for the ShramAI Inspector prototype.
 
-Recommended modules:
+Implemented responsibilities:
+- case lifecycle and synthetic demo case
+- PDF/PNG/JPEG validation and upload
+- digital PDF text extraction
+- scanned-PDF and image OCR
+- deterministic screening rules
+- optional Ollama analysis with strict schema validation
+- evidence-linked findings and human review states
+- audit events
+- screening scorecard and dashboard summary
 
-- app/main.py
-- app/core/config.py
-- app/api/routes/
-- app/services/
-- app/models/
-- app/schemas/
-- app/security/
-- app/audit/
-
-Keep business logic out of route handlers.
+The Vercel container includes Tesseract and PDFium. Durable production deployments should provide a managed PostgreSQL database and private object storage instead of the demo SQLite/local filesystem defaults.
