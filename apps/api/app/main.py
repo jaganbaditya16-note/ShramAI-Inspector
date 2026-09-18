@@ -72,6 +72,62 @@ def validate_security_config() -> None:
             "STORAGE_BACKEND=local is not production-grade (no durability). "
             "Configure an S3-compatible object store and set STORAGE_BACKEND=s3."
         )
+    if settings.is_production and settings.auth_mode == "demo":
+        raise RuntimeError(
+            "AUTH_MODE=demo is forbidden in production: it authenticates nobody. "
+            "Set AUTH_MODE=required (password sessions) or AUTH_MODE=oidc (SSO)."
+        )
+    if settings.auth_mode == "oidc":
+        validate_oidc_config()
+
+
+def validate_oidc_config() -> None:
+    """OIDC misconfiguration must fail at boot, not at first login."""
+    import ipaddress
+    from urllib.parse import urlparse
+
+    missing = [
+        name
+        for name, value in (
+            ("OIDC_ISSUER", settings.oidc_issuer),
+            ("OIDC_CLIENT_ID", settings.oidc_client_id),
+            ("OIDC_CLIENT_SECRET", settings.oidc_client_secret),
+            ("OIDC_REDIRECT_URI", settings.oidc_redirect_uri),
+        )
+        if not value.strip()
+    ]
+    if missing:
+        raise RuntimeError(
+            f"AUTH_MODE=oidc requires these environment variables: {', '.join(missing)}."
+        )
+    issuer = urlparse(settings.oidc_issuer)
+    redirect = urlparse(settings.oidc_redirect_uri)
+
+    def _is_local(host: str | None) -> bool:
+        if not host:
+            return False
+        try:
+            return ipaddress.ip_address(host).is_loopback
+        except ValueError:
+            return host in {"localhost", "127.0.0.1", "::1"}
+
+    issuer_local = _is_local(issuer.hostname)
+    if issuer.scheme != "https" and not (issuer_local and not settings.is_production):
+        raise RuntimeError(
+            "OIDC_ISSUER must use https (http is allowed only for loopback hosts "
+            "outside production)."
+        )
+    redirect_local = _is_local(redirect.hostname)
+    if redirect.scheme != "https" and not (redirect_local and not settings.is_production):
+        raise RuntimeError(
+            "OIDC_REDIRECT_URI must use https (http is allowed only for loopback "
+            "hosts outside production)."
+        )
+    if settings.oidc_default_role not in ("viewer", "inspector", "admin"):
+        raise RuntimeError("OIDC_DEFAULT_ROLE must be one of: viewer, inspector, admin.")
+    post_login = settings.oidc_post_login_redirect
+    if not post_login.startswith("/") or post_login.startswith("//"):
+        raise RuntimeError("OIDC_POST_LOGIN_REDIRECT must be a same-origin relative path.")
 
 
 @asynccontextmanager
@@ -99,7 +155,9 @@ def _bootstrap_admin(db) -> None:
     Production requires explicit credentials via environment; non-production
     writes generated credentials to a gitignored local file instead of logs.
     """
-    if settings.auth_mode != "required":
+    if settings.auth_mode == "oidc" and not settings.oidc_local_login_fallback:
+        return  # SSO-only deployment: no local accounts, no break-glass login.
+    if settings.auth_mode not in {"required", "oidc"}:
         return
     from sqlalchemy import func, select
 

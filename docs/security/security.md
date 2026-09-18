@@ -81,6 +81,36 @@
 - Consistent error envelope; stack traces never leave the server (logged with
   request IDs instead).
 
+### Authentication & identity
+- Provider-agnostic identity layer (`app/services/identity/`): identity
+  providers answer "who is this person"; the local session machinery (opaque
+  cookie token, SHA-256-hashed `auth_sessions` row, org-scoped RBAC) is
+  identical for every provider, so authorisation never depends on the IdP.
+- Modes: `demo` (local/demo only), `required` (password sessions),
+  `oidc` (SSO + optional break-glass password login). Startup **refuses
+  `AUTH_MODE=demo` in production** and refuses `oidc` without issuer, client
+  id/secret and redirect URI.
+- OIDC authorization-code flow with PKCE (S256): `state` + `nonce` + PKCE
+  verifier travel only inside an HMAC-SHA256-signed, HttpOnly, 5-minute
+  cookie; the callback checks the query `state` against the cookie with
+  constant-time comparison; the cookie is single-use. ID tokens are validated
+  against the provider JWKS (`kid`-matched), with exact `iss` match, `aud`
+  check, `exp`/`iat` leeway and nonce binding; discovery documents are cached
+  briefly and their `issuer` must equal the configured issuer.
+- Provisioning never trusts provider role/group claims: SSO users join the
+  configured organisation with the configured default role. An SSO identity
+  links to an existing local account **only when the email is verified**;
+  unverified emails get an isolated account (no account takeover).
+- Sessions: opaque 32-byte tokens, SHA-256-hashed at rest, fresh token on
+  every login (no fixation), expiry enforced server-side, logout revokes the
+  row server-side and clears the cookie; cookies are HttpOnly + SameSite=Lax
+  + Secure outside local SQLite.
+- Provider failures never leak internals: users see one generic message;
+  internal reasons go to audit/log as categories only. Tokens, cookies and
+  secrets are never logged.
+- Audit events cover login (method-tagged), logout and SSO failures without
+  any credential material.
+
 ### AI safety
 - Document text is untrusted data: delimited in prompts, never executed as
   instructions.

@@ -26,6 +26,9 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(160))
     # Nullable: the virtual demo principal has no credential.
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Federated identity link (OIDC): None for local-only accounts.
+    idp_issuer: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    idp_subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(String(20), default="viewer")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(TZDateTime, default=utcnow)
@@ -34,7 +37,10 @@ class User(Base):
     org = relationship("Organization")
     sessions = relationship("AuthSession", back_populates="user", cascade="all, delete-orphan")
 
-    __table_args__ = (Index("uq_users_email", "email", unique=True),)
+    __table_args__ = (
+        Index("uq_users_email", "email", unique=True),
+        Index("uq_users_idp", "idp_issuer", "idp_subject", unique=True),
+    )
 
 
 class AuthSession(Base):

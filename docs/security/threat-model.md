@@ -10,7 +10,9 @@ and review decisions · audit history · credentials/sessions · rule/model prov
 | Threat | Vector | Control (status) |
 |---|---|---|
 | Spoofing | stolen session cookies | HttpOnly + SameSite + Secure; token hashes only; revocation on logout ✔ |
-| Spoofing | credential guessing | Argon2id; uniform failures; auth rate limit ✔; SSO/MFA = deployment |
+| Spoofing | credential guessing | Argon2id; uniform failures; auth rate limit ✔; MFA = IdP policy when using SSO |
+| Spoofing | SSO code/CSRF abuse (state/nonce forgery, code replay) | OIDC PKCE + signed single-use state cookie + query-state binding + nonce-bound ID-token validation ✔ (tested) |
+| Spoofing | account takeover via federated link | verified-email-only linking; unverified emails get isolated accounts ✔ (tested) |
 | Tampering | finding/review forgery | server-side role checks; reviewer + timestamp stamping; audit trail ✔ |
 | Tampering | malicious file alters parser | magic/EOF validation; bounded extraction; parser errors contained ✔ |
 | Tampering | malware uploaded then distributed/stored | pre-storage malware scan stage (clamd INSTREAM); infected → rejected, never stored or processed; scanner down ⇒ fail-closed (upload blocked) ✔ (tested) |

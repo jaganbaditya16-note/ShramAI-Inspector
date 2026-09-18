@@ -88,6 +88,17 @@ with a **local** Ollama model — document text never leaves the deployment host
 If the model is unavailable, deterministic screening continues unaffected and the
 API reports AI status honestly (`disabled` / `unavailable`).
 
+## Authentication
+
+- `AUTH_MODE=demo` — public demo (local/dev only; refused in production).
+- `AUTH_MODE=required` — cookie-session login with organisational users and
+  roles (viewer / inspector / admin).
+- `AUTH_MODE=oidc` — enterprise SSO via any OIDC-compliant provider
+  (authorization-code flow + PKCE, state/nonce binding, short-lived signed
+  flow cookie). New SSO users join the configured organisation; provider
+  role claims are never auto-trusted. See
+  [docs/deployment.md](docs/deployment.md) for the required `OIDC_*` variables.
+
 ## Document storage
 
 Uploads live behind a pluggable `DocumentStore` interface:

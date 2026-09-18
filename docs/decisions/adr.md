@@ -94,3 +94,37 @@ Decisions embedded in this choice:
 
 Consequences: storage provider changes are config-only; retention/lifecycle
 rules remain a deployment concern (deferred).
+
+## ADR-009 — Provider-agnostic identity layer; OIDC SSO without replacing the session core
+
+**Status**: accepted (2026-09)
+
+The existing session architecture (opaque cookie token, hashed `auth_sessions`
+row, org-scoped roles, IDOR-safe queries) is provider-independent and stays.
+A narrow `IdentityProvider` interface (`begin_login` / `complete_login`)
+abstracts *identity verification*: the password endpoint is the local provider
+and `AUTH_MODE=oidc` adds a standards-based OIDC authorization-code flow with
+PKCE. Decisions embedded:
+
+- **No new auth framework** (no Authlib/IdentityModel): PyJWT + the existing
+  machinery. Sessions minted by any provider are indistinguishable downstream,
+  so RBAC/tenancy/audit rules hold everywhere by construction.
+- **Federation binding**: `(idp_issuer, idp_subject)` unique on `users`;
+  linking to an existing local account requires a **verified** email claim;
+  unverified emails get isolated accounts. Provider `groups`/`role` claims are
+  recorded but never auto-map to local roles — privilege escalation via IdP
+  claims is a documented non-goal.
+- **Flow hardening**: state+nonce+PKCE in an HMAC-signed HttpOnly cookie
+  (5 min TTL, single-use, constant-time checks); ID tokens validated against
+  JWKS with issuer/audience/nonce/expiry checks; discovery issuer must match
+  configuration; provider errors never reach users (one generic message,
+  category-only audit reason).
+- **Startup enforcement**: `oidc` without issuer/client-id/secret/redirect
+  refuses to boot; non-https issuer/redirect outside loopback dev refuses;
+  `AUTH_MODE=demo` in production refuses.
+- Live SSO against a real IdP is NOT claimed: the flow is verified in tests
+  against an in-process RSA-backed fake IdP (discovery/JWKS/token endpoints);
+  operator acceptance with the real IdP remains a deployment task.
+
+Consequences: adding SAML/other providers later means implementing
+`IdentityProvider`, not touching authorisation code.

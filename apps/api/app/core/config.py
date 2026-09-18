@@ -78,6 +78,8 @@ class Settings(BaseSettings):
     # --- Authentication ---------------------------------------------------------
     # demo: a virtual demo principal is injected on every request (public demo).
     # required: cookie sessions with organisational users and roles.
+    # oidc: cookie sessions created via SSO (authorization-code flow + PKCE);
+    # the session/authorisation machinery below is identical to `required`.
     auth_mode: AuthMode = "demo"
     session_ttl_minutes: int = Field(default=7 * 24 * 60, ge=10)
     bootstrap_admin_email: str = ""
@@ -85,6 +87,28 @@ class Settings(BaseSettings):
     bootstrap_admin_password: str = ""
     demo_org_name: str = "Inspectorate Demo Organisation"
     demo_user_name: str = "Demo Inspector"
+
+    # --- OIDC / enterprise SSO (auth_mode=oidc) ---------------------------------
+    # Provider-agnostic (Keycloak, Entra ID, Okta, Google, Auth0, ...). Secrets
+    # come from the environment only — never source, never logs.
+    oidc_issuer: str = ""  # e.g. https://idp.example.com/realms/shramai
+    oidc_client_id: str = ""
+    oidc_client_secret: str = ""  # confidential client; env only
+    oidc_redirect_uri: str = ""  # absolute callback URL, https in production
+    oidc_scopes: str = "openid email profile"
+    # New SSO users join this organisation with this role (claim-based role
+    # mapping is a deliberate extension point, not silently trusted).
+    oidc_org_name: str = "Inspectorate Organisation"
+    oidc_default_role: str = "inspector"
+    # Signs the OIDC state/nonce/PKCE challenge cookie. Empty = derived from
+    # the client secret with domain separation (still env-only).
+    oidc_state_secret: str = ""
+    # Keep the password login endpoint as a break-glass admin path.
+    oidc_local_login_fallback: bool = True
+    # Where the callback sends the browser (relative path only, no open redirect).
+    oidc_post_login_redirect: str = "/"
+    oidc_http_timeout_seconds: float = Field(default=10, ge=1, le=60)
+    oidc_token_leeway_seconds: int = Field(default=60, ge=0, le=600)
 
     # --- Malware scanning -----------------------------------------------------
     # off: explicit development/demo mode (documents marked skipped; forbidden

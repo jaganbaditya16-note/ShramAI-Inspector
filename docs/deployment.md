@@ -30,7 +30,8 @@ point `STORAGE_DIR` at a mounted durable volume until object storage is wired.
 
 ## Production checklist (all required before real data)
 
-1. `APP_ENV=production`, `AUTH_MODE=required`
+1. `APP_ENV=production`, `AUTH_MODE=required` (password sessions) or
+   `AUTH_MODE=oidc` (enterprise SSO) — startup refuses `demo` in production
 2. `BOOTSTRAP_ADMIN_EMAIL` + `BOOTSTRAP_ADMIN_PASSWORD` set (startup refuses
    otherwise); change the password after first login
 3. `DATABASE_URL` → managed PostgreSQL with backups + PITR
@@ -48,6 +49,25 @@ point `STORAGE_DIR` at a mounted durable volume until object storage is wired.
 10. Retention/deletion policy implemented as scheduled jobs (schema supports
     hard delete incl. stored files); backup-restore tested
 11. Security/privacy review (DPDP alignment) and approved integration agreements
+
+## Authentication modes
+
+| Mode | Use | Behaviour |
+|---|---|---|
+| `demo` | local/demo only | virtual demo principal on every request; **refused at startup in production** |
+| `required` | production, password auth | cookie sessions (Argon2id logins, org-scoped roles) |
+| `oidc` | enterprise SSO | OIDC authorization-code + PKCE against any compliant IdP (Keycloak, Entra ID, Okta, Google, ...); optional break-glass password login via `OIDC_LOCAL_LOGIN_FALLBACK` |
+
+Required for `oidc`: `OIDC_ISSUER` (https outside loopback dev),
+`OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` (environment only), `OIDC_REDIRECT_URI`
+(https outside loopback dev; must match the IdP client registration).
+Optional: `OIDC_SCOPES`, `OIDC_ORG_NAME` + `OIDC_DEFAULT_ROLE` (where new SSO
+users land — provider role/group claims are never auto-trusted),
+`OIDC_STATE_SECRET` (dedicated HMAC key for the flow cookie), `SESSION_TTL_MINUTES`.
+First admin in `oidc` mode: bootstrap the admin before enabling SSO, or keep
+`OIDC_LOCAL_LOGIN_FALLBACK=true` for the initial login. There is no JWS
+metadata cache to warm; discovery is fetched on first login and cached for
+10 minutes.
 
 ## Document storage backends
 
