@@ -16,6 +16,7 @@ import os
 import socket
 import sqlite3
 import subprocess
+import sys
 import threading
 import time
 import uuid
@@ -92,7 +93,7 @@ def live_background_server(tmp_path_factory: pytest.TempPathFactory) -> tuple[st
         "OLLAMA_MODEL": "",
     }
     proc = subprocess.Popen(
-        [".venv/bin/uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(port)],
+        [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", str(port)],
         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, cwd=".",
     )
     base = f"http://127.0.0.1:{port}"
@@ -350,7 +351,7 @@ def _seed_migrated_rows(db_file: Path, *, filename: str, doc_status: str) -> str
 
 def _run_alembic(db_file: Path, *args: str) -> None:
     subprocess.run(
-        [".venv/bin/alembic", *args],
+        [sys.executable, "-m", "alembic", *args],
         env={**os.environ, "DATABASE_URL": f"sqlite:///{db_file}", "APP_ENV": "local", "AUTH_MODE": "demo"},
         cwd=".", check=True, capture_output=True,
     )

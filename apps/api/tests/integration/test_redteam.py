@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import re
+import sys
 import uuid
 
 import pytest
@@ -367,7 +368,7 @@ def test_cors_preflight_reflects_only_allowed_origins(tmp_path):
         "ALLOWED_ORIGINS": "https://inspector.example.com",
     }
     proc = subprocess.Popen(
-        [".venv/bin/uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8123"],
+        [sys.executable, "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8123"],
         env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         cwd=".",
     )
