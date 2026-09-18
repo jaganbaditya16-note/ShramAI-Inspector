@@ -17,3 +17,16 @@ class CaseOut(BaseModel):
 
 class CaseList(BaseModel):
     items: list[CaseOut]
+
+class FindingOut(BaseModel):
+    id: str
+    rule_id: str
+    title: str
+    severity: str
+    status: str
+    explanation: str
+    evidence: str
+    confidence: int
+
+class FindingUpdate(BaseModel):
+    status: str = Field(pattern="^(accepted|rejected|needs_review)$")
