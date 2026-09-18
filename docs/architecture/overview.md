@@ -55,6 +55,39 @@ separate workers later without touching call-sites.
 - **Report**: `POST /cases/{id}/report` snapshots the scorecard (scores, breakdown,
   provenance, disclaimer) into `reports`; regeneration creates a new snapshot.
 
+## Reliability characteristics (verified behaviour)
+
+Guarantees asserted by the automated suites (`test_reliability.py` and friends),
+not aspirations:
+
+- **One active job per document.** A partial unique index on
+  `processing_jobs(document_id) WHERE status IN ('queued','running')` makes
+  duplicate concurrent execution impossible at the storage engine; a reprocess
+  racing the check gets `409 conflict`. A reprocess burst never overlaps job
+  execution intervals (verified live, 8-way barrier) and the 0004 migration
+  supersedes pre-existing duplicate actives on upgrade.
+- **Batched list reads.** The documents list fetches latest jobs for the whole
+  page in one query (regression-pinned via query counting); case counts were
+  already grouped (2 queries per page).
+- **Bounded resources.** Upload size caps enforced while streaming; page/char/
+  OCR-DPI caps in extraction; AI is a single bounded-timeout attempt with a
+  hard input-char limit (no automatic retries, no retry storms); the pipeline
+  runs under a semaphore (`pipeline_concurrency`, default 2).
+- **Failure containment.** Every pipeline stage persists terminal states with
+  safe messages; a document deleted mid-processing fails its job without
+  partial rows; storage write failure keeps the DB clean; presign failures
+  surface as `503 storage_unavailable` (retryable), not 500s.
+- **Recovery.** Startup marks queued/running jobs interrupted by a restart as
+  failed with a reprocess hint; the retention sweep is bounded, idempotent and
+  error-isolated per stage.
+- **Frontend pacing.** Polling is bounded and self-stopping: the documents
+  page refetches every 2 s only while something is queued/processing; the
+  upload panel polls every 1.2 s with a 120 s deadline and then reports an
+  honest timeout.
+- **Database posture.** SQLite (development) runs with WAL + enforced foreign
+  keys; production should use Postgres (see deployment docs). Rate limiting is
+  per-instance; multi-instance deployments enforce limits at the gateway.
+
 ## Cross-cutting decisions
 
 | Concern | Approach |

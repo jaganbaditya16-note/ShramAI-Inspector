@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from ..db.helpers import TZDateTime, new_uuid, utcnow
@@ -65,6 +65,17 @@ class ProcessingJob(Base):
     document_id: Mapped[str] = mapped_column(ForeignKey("documents.id", ondelete="CASCADE"), index=True)
     # queued -> running -> succeeded | failed
     status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
+    # Storage-level guarantee that a document never has two active jobs (the
+    # SELECT-then-INSERT check alone races under concurrent reprocess calls).
+    __table_args__ = (
+        Index(
+            "uq_active_job_per_document",
+            "document_id",
+            unique=True,
+            sqlite_where=text("status IN ('queued', 'running')"),
+            postgresql_where=text("status IN ('queued', 'running')"),
+        ),
+    )
     attempts: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     detail: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)

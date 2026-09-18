@@ -298,6 +298,27 @@ def test_presigned_download_mode_redirects_to_short_lived_url(client, seeded_dem
     location = response.headers["Location"]
     assert "X-Amz-Signature" in location
     assert "X-Amz-Expires=300" in location  # short-lived, never a public URL
+
+
+def test_presign_failure_maps_to_503(client, seeded_demo, monkeypatch):
+    """A signing outage is a storage-backend failure: 503 with a safe message,
+    never a generic 500 and never provider internals."""
+    from app.services.storage import StorageError
+
+    class _FailingStore:
+        ephemeral_paths = True
+
+        def presign_get(self, key: str, ttl_seconds: int):
+            raise StorageError("The storage backend could not sign the URL.")
+
+    monkeypatch.setattr("app.services.document_service.get_store", lambda: _FailingStore())
+    monkeypatch.setattr(settings, "s3_presigned_downloads", True)
+
+    response = client.get(f"/api/v1/documents/{seeded_demo['document_id']}/download")
+    assert response.status_code == 503
+    body = response.json()["error"]
+    assert body["code"] == "storage_unavailable"
+    assert "sign" not in body["message"].lower()
     assert response.headers["Cache-Control"] == "no-store"
 
 

@@ -15,7 +15,7 @@ from __future__ import annotations
 import contextlib
 import logging
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ..core.errors import (
@@ -208,12 +208,33 @@ def get_document_or_404(db: Session, principal: Principal, document_id: str) -> 
 
 
 def latest_job(db: Session, document_id: str) -> ProcessingJob | None:
-    return db.scalar(
-        select(ProcessingJob)
-        .where(ProcessingJob.document_id == document_id)
-        .order_by(ProcessingJob.created_at.desc())
-        .limit(1)
+    return latest_jobs_for_documents(db, [document_id]).get(document_id)
+
+
+def latest_jobs_for_documents(db: Session, document_ids: list[str]) -> dict[str, ProcessingJob]:
+    """Newest job per document in ONE query (avoids the per-row N+1 on list
+    endpoints). Window functions are supported by SQLite 3.25+ and Postgres."""
+    if not document_ids:
+        return {}
+    ranked = (
+        select(
+            ProcessingJob.id.label("job_id"),
+            func.row_number()
+            .over(
+                partition_by=ProcessingJob.document_id,
+                order_by=ProcessingJob.created_at.desc(),
+            )
+            .label("rn"),
+        )
+        .where(ProcessingJob.document_id.in_(document_ids))
+        .subquery()
     )
+    jobs = db.scalars(
+        select(ProcessingJob)
+        .join(ranked, ProcessingJob.id == ranked.c.job_id)
+        .where(ranked.c.rn == 1)
+    ).all()
+    return {job.document_id: job for job in jobs}
 
 
 def delete_document(db: Session, principal: Principal, document: Document) -> None:

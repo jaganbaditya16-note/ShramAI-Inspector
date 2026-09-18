@@ -8,6 +8,7 @@ from urllib.parse import quote
 from fastapi import APIRouter, Depends, File, UploadFile
 from fastapi.responses import FileResponse, RedirectResponse, Response
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from ...core.config import settings
@@ -106,8 +107,9 @@ def list_documents(
         select(Document).where(*conditions)
         .order_by(Document.created_at.desc()).limit(page.limit).offset(page.offset)
     ).all()
+    latest_jobs = document_service.latest_jobs_for_documents(db, [d.id for d in documents])
     return DocumentList(
-        items=[_document_out(d, document_service.latest_job(db, d.id)) for d in documents],
+        items=[_document_out(d, latest_jobs.get(d.id)) for d in documents],
         meta={"total": total, "limit": page.limit, "offset": page.offset},
     )
 
@@ -139,7 +141,13 @@ async def reprocess_document(document_id: str, db: Session = Depends(get_db),
     db.add(job)
     document.status = "queued"
     document.error = None
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        # A concurrent request registered an active job first (the partial
+        # unique index is the authoritative guard against double execution).
+        db.rollback()
+        raise Conflict("A processing job is already running for this document.") from None
     db.refresh(job)
     audit_service.record(
         db, action="document_reprocess_requested", org_id=principal.org_id,
@@ -188,7 +196,14 @@ def download_document(document_id: str, db: Session = Depends(get_db),
     key = document.storage_key
 
     if settings.s3_presigned_downloads:
-        url = store.presign_get(key, settings.s3_presign_ttl_seconds)
+        try:
+            url = store.presign_get(key, settings.s3_presign_ttl_seconds)
+        except StorageError as exc:
+            # A signing failure is a storage-backend outage, not a client error:
+            # surface 503 so callers retry instead of seeing a generic 500.
+            raise StorageUnavailable(
+                "The stored file is temporarily unavailable; try again."
+            ) from exc
         if url is not None:
             return RedirectResponse(url, status_code=307, headers={"Cache-Control": "no-store"})
 
