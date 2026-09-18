@@ -16,12 +16,15 @@ services:
       - postgres_data:/var/lib/postgresql/data
 
   api:
-    build: ./apps/api
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/shramai
       API_PORT: 8000
       ALLOWED_ORIGINS: http://localhost:3000
       APP_ENV: development
+      KNOWLEDGE_DIR: /app/data/knowledge
     ports:
       - "8000:8000"
     depends_on:
