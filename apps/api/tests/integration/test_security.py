@@ -121,6 +121,40 @@ def test_rate_limit_blocks_burst(client, monkeypatch):
     assert statuses.count(200) + statuses.count(429) == 8
 
 
+# --- Origin check / proxy allow-list ---------------------------------------------------
+
+def test_origin_allow_list_accepts_full_origins_and_bare_hosts(client, monkeypatch):
+    """Behind a rewrite proxy the Host header is the proxy target, so the
+    browser origin must match via ALLOWED_ORIGINS. Regression: full-origin
+    entries could never match because the check compared scheme-stripped
+    hosts against scheme-carrying entries."""
+    monkeypatch.setattr(settings, "allowed_origins", "https://inspector.example.com,localhost:3200")
+
+    # full-origin entry (scheme carried) is accepted
+    ok_origin = client.post(
+        "/api/v1/cases",
+        json={"title": "Allow-list Case"},
+        headers={"Origin": "https://inspector.example.com"},
+    )
+    assert ok_origin.status_code == 201
+
+    # bare-host entry is accepted
+    ok_host = client.post(
+        "/api/v1/cases",
+        json={"title": "Allow-list Host Case"},
+        headers={"Origin": "http://localhost:3200"},
+    )
+    assert ok_host.status_code == 201
+
+    # unknown origins are still rejected
+    evil = client.post(
+        "/api/v1/cases",
+        json={"title": "Evil Origin Case"},
+        headers={"Origin": "https://evil.example.net"},
+    )
+    assert evil.status_code == 403
+
+
 # --- Hardening headers ---------------------------------------------------------------
 
 def test_security_headers_present(client):

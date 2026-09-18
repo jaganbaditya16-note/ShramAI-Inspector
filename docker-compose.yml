@@ -26,6 +26,8 @@ services:
       STORAGE_DIR: /app/storage
       KNOWLEDGE_DIR: /app/data/knowledge
       RATE_LIMIT_ENABLED: "true"
+      # Browser origin behind the web proxy (Host header = proxy target).
+      ALLOWED_ORIGINS: http://localhost:3000
       # Optional malware scanning: uncomment MALWARE_SCAN_MODE/CLAMD_HOST and
       # the clamav service below to stream uploads through ClamAV.
       # MALWARE_SCAN_MODE: enforcing

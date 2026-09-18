@@ -138,8 +138,16 @@ class OriginCheckMiddleware(BaseHTTPMiddleware):
             forwarded_host = request.headers.get("x-forwarded-host") if settings.trust_proxy_headers else None
             host = forwarded_host or request.headers.get("host", "")
             origin_host = origin.split("://", 1)[-1]
+            # The allow-list may contain full origins ("https://app.example.com")
+            # or bare hosts ("app.example.com") — accept either form. (Browser
+            # E2E caught that full-origin entries could never match before.)
             allowed = settings.allowed_origin_list
-            if origin_host != host and origin_host not in allowed:
+            allowed_hosts = {entry.split("://", 1)[-1] for entry in allowed}
+            if (
+                origin_host != host
+                and origin not in allowed
+                and origin_host not in allowed_hosts
+            ):
                 request_id = getattr(request.state, "request_id", "-")
                 return JSONResponse(
                     status_code=403,
