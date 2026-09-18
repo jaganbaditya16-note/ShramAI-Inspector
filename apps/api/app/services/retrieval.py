@@ -8,15 +8,14 @@ def _knowledge_dir() -> Path:
         return Path(configured)
 
     source = Path(__file__).resolve()
-    candidates = [
-        source.parents[4] / "data" / "knowledge",
-        source.parents[3] / "data" / "knowledge",
-        source.parents[2] / "data" / "knowledge",
-    ]
-    for candidate in candidates:
+    for parent in source.parents:
+        candidate = parent / "data" / "knowledge"
         if candidate.exists():
             return candidate
-    return candidates[0]
+
+    # Safe fallback for container images that intentionally do not package
+    # the optional legal/reference corpus.
+    return source.parent / "knowledge"
 
 KNOWLEDGE_DIR = _knowledge_dir()
 
