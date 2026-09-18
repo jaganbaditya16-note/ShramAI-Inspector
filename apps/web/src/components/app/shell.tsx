@@ -107,17 +107,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="avatar" aria-hidden>
                   {initials}
                 </span>
-                {!user.is_demo ? (
-                  <button
-                    type="button"
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => void logout()}
-                  >
-                    <IconLogout size={15} />
-                    <span className="visually-hidden">Log out</span>
-                    <span aria-hidden>Log out</span>
-                  </button>
-                ) : null}
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => void logout()}
+                >
+                  <IconLogout size={15} />
+                  <span className="visually-hidden">Log out</span>
+                  <span aria-hidden>Log out</span>
+                </button>
               </>
             ) : null}
           </div>
