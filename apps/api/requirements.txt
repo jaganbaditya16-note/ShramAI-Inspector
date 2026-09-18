@@ -6,6 +6,7 @@ python-multipart==0.0.20
 SQLAlchemy==2.0.43
 psycopg[binary]==3.2.9
 pypdf==6.0.0
+pypdfium2==5.13.0
 Pillow==11.3.0
 pytesseract==0.3.13
 httpx==0.28.1
