@@ -215,8 +215,7 @@ def download_document(document_id: str, db: Session = Depends(get_db),
     return FileResponse(
         path=path,
         media_type=document.content_type,
-        filename=document.original_filename,
-        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+        headers=headers,  # includes the sanitised RFC-5987 Content-Disposition
     )
 
 

@@ -76,7 +76,10 @@
   `Permissions-Policy`, `Cache-Control: no-store`, HSTS outside local SQLite.
 - Request-body size cap; per-IP sliding-window rate limits (default / auth /
   upload buckets); `429` + `Retry-After`.
-- Origin check on unsafe methods (CSRF defence for cookie sessions).
+- Origin check on unsafe methods (CSRF defence for cookie sessions); the
+  `ALLOWED_ORIGINS` allow-list accepts full origins or bare hosts so proxied
+  deployments (reverse proxy, docker-compose, the runtime `API_ORIGIN`
+  middleware) can declare the browser origin the Host header cannot carry.
 - CORS is an explicit allow-list; empty default = same-origin only.
 - Consistent error envelope; stack traces never leave the server (logged with
   request IDs instead).

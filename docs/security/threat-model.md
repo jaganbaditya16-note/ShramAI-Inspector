@@ -22,14 +22,40 @@ and review decisions · audit history · credentials/sessions · rule/model prov
 | Information disclosure | stored files reached directly / cross-tenant | objects private by default, no public URLs, keys never exposed; downloads re-check org-scoped access; presigned URLs (opt-in) are short-lived ✔ (tested) |
 | Information disclosure | log leakage | structured logs carry ids/status only; document text never logged ✔ |
 | Information disclosure | prompt/content exfiltration via AI | local-only provider by default; bounded input; no third-party calls ✔ |
+| Information disclosure | document text in logs/audit/reports API | canary-based red-team probe asserts extracted text never reaches server logs, audit payloads or report bodies; audit stores sha256 prefix only ✔ (tested) |
+| Information disclosure | auth enumeration via audit/behaviour | uniform login failures with dummy-hash timing cover; failed-login audit reasons are never exposed via any API (case audits only) ✔ (tested) |
 | DoS | huge uploads / deep PDFs / OCR storms | size caps, page caps, OCR page+DPI bounds, worker semaphore, body limit ✔ |
 | DoS | request floods | per-IP sliding windows with Retry-After ✔; multi-instance = gateway |
 | Elevation of privilege | role bypass | role rank checks per endpoint; admin-gated bootstrap ✔ |
 | Prompt injection | instructions inside documents | untrusted delimiting; schema validation; grounding rejection; findings never auto-confirm ✔ (tested) |
 | SQL injection | — | SQLAlchemy bound parameters only; no string SQL ✔ |
 | XSS | stored text rendered in UI | React auto-escaping; no `dangerouslySetInnerHTML` anywhere ✔ |
-| CSRF | cookie misuse cross-site | SameSite=Lax + Origin check on unsafe methods ✔ |
+| CSRF | cookie misuse cross-site | SameSite=Lax + Origin check on unsafe methods; allow-list accepts full-origin or bare-host entries for proxied deployments ✔ (tested) |
+| XSS (API layer) | reflected/stored payload served as HTML | the API serves JSON only; downloads are `attachment` with sanitised RFC-5987 filenames ✔ (tested) |
+| CORS abuse | credentialed cross-origin reads | CORS registered only from an explicit startup allow-list; preflight reflects allow-listed origins exclusively (live-tested) ✔ |
 | Path traversal | storage key manipulation | strict key shape + root confinement (tested) ✔ |
+| Malicious headers | hostile `X-Request-ID`, filename headers | request ids are validated against a safe charset or regenerated; filenames sanitised (basename, control-char strip, 255 cap) before storage and in `Content-Disposition` ✔ (tested) |
+
+## AI containment (verified)
+
+- Document text is framed as **untrusted data** between explicit delimiters;
+  the prompt forbids following instructions found inside it (probe-tested).
+- Every AI finding must cite a verbatim quote located in the extracted text
+  (whitespace/case-insensitive with bounded prefix fallback); ungrounded
+  findings are rejected and counted on the model run.
+- Malformed or hostile provider output maps to a contained `error`/`unavailable`
+  state with zero persisted findings; AI findings always start as
+  `needs_review` and no automated path can confirm them.
+- The knowledge corpus is operator-controlled local files with provenance;
+  uploaded documents never enter it (retrieval-poisoning surface closed).
+
+## OIDC boundary (verified)
+
+Exact issuer match before any discovered endpoint is used; RS-family/ES
+allow-list (rejects `none` and symmetric confusion); JWKS `kid` match; `aud`,
+`exp`/`iat`, required-claims and nonce binding; signed single-use state cookie.
+Post-login redirect is a fixed, configured same-origin relative path (open
+redirects rejected at config validation).
 
 ## Residual risks (documented, accepted for current stage)
 
@@ -45,3 +71,9 @@ and review decisions · audit history · credentials/sessions · rule/model prov
 - Demo mode (`AUTH_MODE=demo`) is unauthenticated by design and restricted to
   synthetic data operationally; misuse with real documents is a policy violation,
   not a code gap — production deployments must set `AUTH_MODE=required`.
+- `/api/docs`, `/api/redoc` and `/api/openapi.json` are public by design (the
+  API is authenticated; the schema discloses endpoint shapes only). Operators
+  who want them hidden should block them at the gateway.
+- These controls are technical measures only. They do not constitute legal,
+  regulatory or compliance certification of the platform; human review of every
+  finding remains mandatory by design.

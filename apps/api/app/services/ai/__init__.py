@@ -163,7 +163,7 @@ class OllamaProvider(AIProvider):
                 response = await client.post(f"{self.base_url}/api/generate", json=payload)
                 response.raise_for_status()
                 raw = response.json().get("response", "{}")
-        except (httpx.HTTPError, ValueError, TypeError) as exc:
+        except (httpx.HTTPError, ValueError, TypeError, AttributeError) as exc:
             logger.warning("event=ai_provider_unavailable provider=ollama error=%s", type(exc).__name__)
             return AIAnalysisResult(
                 status="unavailable", provider=self.name, model=self.model,
