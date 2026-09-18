@@ -1,12 +1,19 @@
+# Pinned production dependencies.
 fastapi==0.116.1
 uvicorn[standard]==0.35.0
 pydantic==2.11.7
 pydantic-settings==2.10.1
 python-multipart==0.0.20
 SQLAlchemy==2.0.43
+alembic==1.16.5
 psycopg[binary]==3.2.9
+argon2-cffi==25.1.0
 pypdf==6.0.0
 pypdfium2==5.13.0
 Pillow==11.3.0
 pytesseract==0.3.13
 httpx==0.28.1
+boto3==1.43.97
+pyjwt[crypto]==2.10.1
+cryptography==45.0.7
+email-validator==2.2.0

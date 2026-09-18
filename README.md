@@ -1,151 +1,172 @@
 # ShramAI Inspector
 
-AI-assisted labour-code compliance inspection platform for Shram Suvidha.
+AI-assisted labour-document inspection platform: turn uploaded labour documents into
+**evidence-linked screening signals** for authorised human review.
 
-## Mission
-ShramAI Inspector helps authorized inspectors review labour compliance documents using a hybrid architecture:
+Built for Digital Shram Sankalp — Problem Statement #5: *AI-Driven Smart Inspection
+System for Labour Code Compliance (Shram Suvidha Portal)*.
 
-**Document AI/OCR -> structured extraction -> deterministic rule engine -> retrieval-augmented evidence -> anomaly/risk detection -> explainable findings -> human verification -> audit-ready report**
+## What it does
 
-The system is an assistive tool, not an autonomous legal decision-maker. Findings are recommendations for authorized human review.
+```
+UPLOAD → VALIDATE → STORE → EXTRACT (text/OCR) → CLASSIFY → RULE ENGINE
+       → OPTIONAL AI ANALYSIS (grounded) → FINDINGS → HUMAN REVIEW
+       → AUDIT TRAIL → SCREENING SCORECARD
+```
 
-## Problem Statement
-Digital Shram Sankalp — Problem Statement #5: AI-Driven Smart Inspection System for Labour Code Compliance for Shram Suvidha Portal.
+- **Deterministic first**: versioned, tested screening rules handle hard checks.
+- **AI is assistive and grounded**: the optional local-model analysis must cite
+  verbatim document evidence; ungrounded quotes are rejected automatically.
+- **Humans decide**: every substantive finding requires explicit review
+  (confirm / dismiss) that is audited and stamped with reviewer + time.
+- **Never a legal authority**: no invented laws, citations, penalties or
+  deadlines — wording and workflow enforce this.
 
-## Design principles
-- Human-in-the-loop for every substantive compliance finding.
-- Evidence-first: every finding links to the document/page/field used.
-- Deterministic rules for hard checks; AI for extraction, retrieval and prioritization.
-- Never invent legal requirements. Unknown or ambiguous checks are marked Needs Review.
-- Data minimization, encryption in transit/at rest, role-based access, audit logs and configurable retention.
-- No final legal conclusion, penalty, prosecution or enforcement action is generated automatically.
-- Confidence and provenance are displayed with each finding.
-- Designed for multilingual and scanned-document workflows.
-- Public demo data must be synthetic/redacted.
+## Monorepo layout
 
-## MVP flow
-1. Open the demo inspector workspace.
-2. Create an inspection case or use the synthetic demo case.
-3. Upload supported labour documents (PDF/JPG/PNG).
-4. Extract text from digital PDFs and OCR scanned PDFs/images.
-5. Run deterministic screening checks and optional local AI analysis.
-6. Review findings with evidence and confidence.
-7. Accept or dismiss findings during human review.
-8. Generate a transparent screening scorecard.
-9. Export the scorecard as JSON.
-10. View documents and audit activity.
-
-## Monorepo structure
 ```
 apps/
-  web/       # Next.js frontend
-  api/       # FastAPI backend
-services/
-  ocr/       # OCR/document preprocessing
-  rules/     # deterministic compliance rules
-  ai/        # RAG, extraction and risk analysis
-packages/
-  contracts/ # shared API schemas/types
-  ui/        # shared UI primitives
-  config/    # shared configuration
+  web/    Next.js 16 inspector workspace (App Router, TypeScript, TanStack Query,
+          Framer Motion, accessible design system)
+  api/    FastAPI backend (layered: core / api / schemas / services / models),
+          SQLAlchemy 2 + Alembic, PostgreSQL or SQLite
 data/
-  demo/      # synthetic sample documents and fixtures
+  demo/        synthetic demo guidance
+  knowledge/   approved, versioned reference corpus (markdown, provenance headers)
 docs/
-  architecture/
-  security/
-  compliance/
-scripts/
-tests/
+  architecture/  system, data model, API contract, pipeline, frontend
+  security/      security baseline and threat model
+  compliance/    AI governance
+  deployment.md  environments and production requirements
+  development.md setup, testing, troubleshooting
+  decisions/     architecture decision records
 ```
 
-## Implemented API
-- `GET /api/v1/health`
-- `GET /api/v1/cases`
-- `POST /api/v1/cases`
-- `GET /api/v1/cases/{case_id}`
-- `POST /api/v1/cases/{case_id}/documents`
-- `POST /api/v1/documents/{document_id}/process`
-- `GET /api/v1/cases/{case_id}/documents`
-- `GET /api/v1/cases/{case_id}/findings`
-- `PATCH /api/v1/findings/{finding_id}`
-- `GET /api/v1/cases/{case_id}/audit`
-- `GET /api/v1/dashboard/summary`
-- `POST /api/v1/cases/{case_id}/report`
-
-## Non-goals for MVP
-- Direct production integration with government systems without authorization.
-- Automatic legal adjudication.
-- Facial recognition or worker surveillance.
-- Unverified personal-data enrichment.
-- Autonomous enforcement decisions.
-
-## Quality gates
-Before demo/submission:
-- frontend and backend run independently and together
-- uploaded documents never expose secrets
-- every AI finding has provenance
-- deterministic rules have tests
-- API validation and error handling are covered
-- audit events are recorded
-- synthetic demo data is reproducible
-- README includes setup and architecture
-
-## Current MVP status
-
-The repository contains a working reference implementation for:
-- Next.js inspector workspace
-- FastAPI API
-- PostgreSQL/SQLAlchemy persistence
-- secure PDF/image upload validation
-- PDF text extraction, scanned-PDF OCR and image OCR
-- versioned deterministic screening rules
-- optional local Ollama analysis with schema validation
-- provenance-aware local knowledge retrieval
-- evidence-linked findings
-- human review states
-- audit events
-- report generation
-- Docker Compose
-- CI checks
-
-### Run locally with Docker
+## Quick start (Docker)
 
 ```bash
 docker compose up --build
 ```
 
-Open:
-- Web: http://localhost:3000
-- API: http://localhost:8000
-- API docs: http://localhost:8000/api/docs
+- Web: http://localhost:3000 (the browser only ever calls same-origin `/api/v1`;
+  the Next.js server proxies to the API container)
+- API: http://localhost:8000 · OpenAPI: http://localhost:8000/api/docs
 
-### Optional local AI
+The demo workspace seeds itself with a **clearly-synthetic** payslip document and
+screens it end-to-end (extraction → classification → rules), so the workflow is
+inspectable immediately.
 
-Set `OLLAMA_MODEL` to an installed local model and keep `OLLAMA_BASE_URL` pointed at the local Ollama service. If no model is configured or the model is unavailable, deterministic screening continues and the API reports the AI status rather than failing the inspection.
+## Quick start (local dev)
 
-### Production security gate
+Backend (Python 3.12):
 
-Before real government or worker data is connected, replace demo authentication with an approved identity provider, use database migrations, private object storage/KMS, malware scanning, centralized secrets, production rate limiting, monitoring, backups, retention/deletion controls and formal security/privacy review.
+```bash
+cd apps/api
+python -m venv .venv && .venv/bin/pip install -r requirements.txt -r requirements-dev.txt
+cp ../../.env.example .env   # optional; defaults work for local dev
+alembic upgrade head
+uvicorn app.main:app --reload --port 8000
+```
 
-## Submission positioning
+Frontend (Node 22):
 
-ShramAI Inspector is designed around Digital Shram Sankalp Problem Statement #5. The prototype demonstrates the requested document-analysis workflow while deliberately keeping legal determination and enforcement decisions with authorized human reviewers.
+```bash
+cd apps/web
+npm install
+npm run dev   # http://localhost:3000, proxies /api/v1 to 127.0.0.1:8000
+```
 
-## Verification
+Authentication modes (env `AUTH_MODE`):
+- `demo` (default) — virtual demo principal, no login, synthetic-data workspace.
+- `required` — organisational users + roles (`admin`/`inspector`/`viewer`),
+  HttpOnly cookie sessions, bootstrap admin via `BOOTSTRAP_ADMIN_*` env vars.
 
-Every push is checked by GitHub Actions for backend tests and frontend production build. Review the latest workflow result before production deployment.
+## Optional local AI
 
+Set `OLLAMA_MODEL` (and `OLLAMA_BASE_URL` if not default) to enable AI screening
+with a **local** Ollama model — document text never leaves the deployment host.
+If the model is unavailable, deterministic screening continues unaffected and the
+API reports AI status honestly (`disabled` / `unavailable`).
 
-## Single-domain Vercel deployment
+## Data lifecycle
 
-The repository includes a root `vercel.json` configured for Vercel Services:
-- `web`: Next.js inspector dashboard
-- `api`: containerized FastAPI backend with Tesseract OCR
-- `/api/*`: routed to FastAPI
-- `/*`: routed to Next.js
+Retention is configurable and non-destructive by default
+(`RETENTION_DOCUMENT_DAYS`, `RETENTION_REJECTED_DOCUMENT_DAYS`,
+`RETENTION_CASE_DAYS`, `RETENTION_SESSION_DAYS` — `0` = never). Soft-deleted
+cases can be hard-purged after a configured window; deleted documents always
+have their storage objects removed first (no orphans); audit events are never
+deleted. Sweeps run at startup and on demand via
+`POST /api/v1/admin/retention/run` (admin only). See
+[docs/architecture/data-lifecycle.md](docs/architecture/data-lifecycle.md).
 
-This keeps the public product on one domain. Vercel Services requires the Vercel project framework to be set to **Services**. Vercel's current documentation describes this model for a Next.js frontend plus FastAPI backend on one deployment URL.
+## Authentication
 
-For the public prototype, the backend tolerates blank environment variables and uses a temporary SQLite database under Vercel's ephemeral filesystem. This is demo-only: Vercel containers are stateless, so durable PostgreSQL and private object storage must be configured before handling real worker records. The API container includes Tesseract plus PDFium so image OCR and scanned-PDF OCR can run in the deployed prototype.
+- `AUTH_MODE=demo` — public demo (local/dev only; refused in production).
+- `AUTH_MODE=required` — cookie-session login with organisational users and
+  roles (viewer / inspector / admin).
+- `AUTH_MODE=oidc` — enterprise SSO via any OIDC-compliant provider
+  (authorization-code flow + PKCE, state/nonce binding, short-lived signed
+  flow cookie). New SSO users join the configured organisation; provider
+  role claims are never auto-trusted. See
+  [docs/deployment.md](docs/deployment.md) for the required `OIDC_*` variables.
 
-The browser uses the same-origin `/api/v1` path in production, so it does not call `localhost:8000`.
+## Document storage
+
+Uploads live behind a pluggable `DocumentStore` interface:
+
+- `STORAGE_BACKEND=local` (default): local disk for development and tests only
+  (production startup refuses it).
+- `STORAGE_BACKEND=s3`: any private S3-compatible bucket (AWS S3, MinIO,
+  Cloudflare R2). Objects are **private by default**, keys are
+  server-generated, downloads stream through the authorised API (short-lived
+  presigned redirects only if you enable `S3_PRESIGNED_DOWNLOADS`), and
+  credentials are read from the environment — never hard-coded, never exposed
+  to the frontend.
+
+See [.env.example](.env.example) for the `S3_*` variables and
+[docs/deployment.md](docs/deployment.md) for production setup.
+
+## Malware scanning
+
+Uploads can pass through an optional malware-scan stage before any bytes are
+stored or processed:
+
+- `MALWARE_SCAN_MODE=off` (default, local/demo): uploads are marked
+  `scan_status=skipped` — never claimed clean — and production boot refuses to
+  run with scanning off.
+- `MALWARE_SCAN_MODE=enforcing`: every upload is streamed to a ClamAV daemon
+  (`CLAMD_HOST`, default port `3310`). Infected files are rejected and never
+  stored; if the scanner is unreachable, times out or errors the upload is
+  blocked (fail-closed) and reported via `/api/v1/health`.
+
+See [security baseline](docs/security/security.md) for the control detail.
+
+## Quality gates
+
+Every push runs GitHub Actions:
+
+- API: ruff lint · Alembic migration up/down/up against PostgreSQL 17 ·
+  full pytest suite (unit + integration + security) · integration suite against
+  PostgreSQL · dependency audit
+- Web: eslint · `tsc --noEmit` · production build
+- Containers: build all images and smoke-test health, demo seed and OpenAPI
+
+## Documentation
+
+- [Architecture overview](docs/architecture/overview.md)
+- [API contract](docs/architecture/api-contract.md) (live OpenAPI at `/api/docs`)
+- [Data model](docs/architecture/data-model.md)
+- [Document pipeline](docs/architecture/pipeline.md)
+- [Security baseline](docs/security/security.md) and [threat model](docs/security/threat-model.md)
+- [AI governance](docs/compliance/ai-governance.md)
+- [Deployment](docs/deployment.md) · [Development & testing](docs/development.md)
+- [Decision records](docs/decisions/adr.md)
+
+## Production security gate
+
+Before connecting real worker or establishment data: approved identity provider
+integration, durable PostgreSQL + private object storage with encryption/KMS,
+malware scanning, centralised secrets, monitoring/alerting, backups, retention
+and deletion controls, and a formal security/privacy review. The codebase is
+structured for these (tenancy, roles, audit, migrations, storage abstraction) —
+see [docs/deployment.md](docs/deployment.md) for the exact checklist.

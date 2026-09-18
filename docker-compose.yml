@@ -21,20 +21,38 @@ services:
       dockerfile: apps/api/Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/shramai
-      API_PORT: 8000
-      ALLOWED_ORIGINS: http://localhost:3000
       APP_ENV: development
+      AUTH_MODE: demo # set "required" + bootstrap admin credentials for shared use
+      STORAGE_DIR: /app/storage
       KNOWLEDGE_DIR: /app/data/knowledge
+      RATE_LIMIT_ENABLED: "true"
+      # Browser origin behind the web proxy (Host header = proxy target).
+      ALLOWED_ORIGINS: http://localhost:3000
+      # Optional malware scanning: uncomment MALWARE_SCAN_MODE/CLAMD_HOST and
+      # the clamav service below to stream uploads through ClamAV.
+      # MALWARE_SCAN_MODE: enforcing
+      # CLAMD_HOST: clamd
+      # CLAMD_PORT: 3310
+      # Optional S3-compatible document storage (e.g. the minio service below).
+      # STORAGE_BACKEND: s3
+      # S3_ENDPOINT_URL: http://minio:9000
+      # S3_BUCKET: shramai-documents
+      # S3_ACCESS_KEY_ID: minioadmin      # local MinIO only — never real creds
+      # S3_SECRET_ACCESS_KEY: minioadmin  # local MinIO only — never real creds
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - document_storage:/app/storage
 
   web:
-    build: ./apps/web
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+    build:
+      context: ./apps/web
+      args:
+        # Server-side rewrite target: the API container (never the browser).
+        API_ORIGIN: http://api:8000
     ports:
       - "3000:3000"
     depends_on:
@@ -42,3 +60,23 @@ services:
 
 volumes:
   postgres_data:
+  document_storage:
+  minio_data:
+
+# Optional ClamAV sidecar for malware scanning (MALWARE_SCAN_MODE=enforcing).
+# Uncomment to enable; signatures update via the image's freshclam config.
+#  clamd:
+#    image: clamav/clamav:latest
+#    ports:
+#      - "3310:3310"
+
+# Optional S3-compatible object store for document storage
+# (STORAGE_BACKEND=s3 + the S3_* variables above). Private by default.
+#  minio:
+#    image: quay.io/minio/minio:latest
+#    command: server /data --console-address ":9001"
+#    ports:
+#      - "9000:9000"
+#      - "9001:9001"
+#    volumes:
+#      - minio_data:/data

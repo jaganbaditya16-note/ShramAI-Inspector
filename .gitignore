@@ -8,9 +8,22 @@ __pycache__/
 !.env.example
 *.log
 coverage/
+*.tsbuildinfo
 .pytest_cache/
+.ruff_cache/
 .DS_Store
-shramai.db
+*.db
 *.sqlite
-storage/
-.env.local
+*.db-wal
+*.db-shm
+# Runtime document-storage dirs only (never the app/services/storage/ package).
+/storage/
+/apps/api/storage/
+bootstrap_admin_credentials.txt
+.vercel
+
+# Playwright (browser E2E)
+apps/web/e2e-artifacts/
+apps/web/e2e-report/
+apps/web/.next-demo/
+apps/web/.next-auth/
