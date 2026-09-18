@@ -6,7 +6,7 @@ ShramAI Inspector is an assistive decision-support system.
 
 - Explainability: each finding states evidence and check used.
 - Traceability: model version, rule version, source document and timestamps are recorded.
-- Human oversight: reviewer accepts, rejects, edits or marks a finding as needs review.
+- Human oversight: reviewer accepts, rejects or leaves a finding as needs review.
 - Reproducibility: document plus versioned configuration can be reprocessed.
 - No fabricated legal citations: legal sources are curated/approved and retrieved with provenance.
 - Uncertainty is explicit; low confidence is not a definitive violation.
