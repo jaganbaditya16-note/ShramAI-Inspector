@@ -153,6 +153,27 @@ async def process_document(document_id: str, db: Session = Depends(get_db)):
     record(db, "document_processed", document.case_id, {"document_id": document.id, "text_extracted": bool(text.strip()), "rule_version": RULE_VERSION, "ai_status": ai_result.status, "ai_findings": len(ai_result.findings)})
     return {"document_id": document.id, "status": document.status, "characters_extracted": len(text), "rule_findings": len(results), "ai_findings": len(ai_result.findings), "ai_status": ai_result.status}
 
+@app.get("/api/v1/cases/{case_id}/documents", dependencies=[Depends(require_demo_token)])
+def list_documents(case_id: str, db: Session = Depends(get_db)):
+    if not db.get(Case, case_id):
+        raise HTTPException(404, "Case not found")
+    documents = db.scalars(select(Document).where(Document.case_id == case_id).order_by(Document.created_at.desc())).all()
+    return [
+        {"id": d.id, "filename": d.filename, "content_type": d.content_type, "size_bytes": d.size_bytes, "status": d.status, "created_at": d.created_at.isoformat()}
+        for d in documents
+    ]
+
+@app.get("/api/v1/cases/{case_id}/audit", dependencies=[Depends(require_demo_token)])
+def list_audit_events(case_id: str, db: Session = Depends(get_db)):
+    if not db.get(Case, case_id):
+        raise HTTPException(404, "Case not found")
+    from .models import AuditEvent
+    events = db.scalars(select(AuditEvent).where(AuditEvent.case_id == case_id).order_by(AuditEvent.created_at.desc())).all()
+    return [
+        {"id": e.id, "action": e.action, "detail": e.detail, "created_at": e.created_at.isoformat()}
+        for e in events
+    ]
+
 @app.get("/api/v1/cases/{case_id}/findings", response_model=list[FindingOut], dependencies=[Depends(require_demo_token)])
 def list_findings(case_id: str, db: Session = Depends(get_db)):
     if not db.get(Case, case_id):
