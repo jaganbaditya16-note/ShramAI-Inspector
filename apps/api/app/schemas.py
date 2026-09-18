@@ -1,0 +1,19 @@
+from pydantic import BaseModel, Field
+
+class HealthResponse(BaseModel):
+    status: str
+    version: str
+
+class CaseCreate(BaseModel):
+    name: str = Field(min_length=3, max_length=160)
+    establishment_reference: str | None = Field(default=None, max_length=120)
+
+class CaseOut(BaseModel):
+    id: str
+    name: str
+    status: str
+    documents: int
+    findings: int
+
+class CaseList(BaseModel):
+    items: list[CaseOut]
