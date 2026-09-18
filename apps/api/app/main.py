@@ -68,6 +68,10 @@ def case_out(case: Case) -> CaseOut:
         findings=len(case.findings),
     )
 
+@app.get("/", response_model=HealthResponse)
+def root_health() -> HealthResponse:
+    return HealthResponse(status="ok", version=app.version)
+
 @app.get("/api/v1/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok", version=app.version)
@@ -168,6 +172,19 @@ async def upload_document(case_id: str, file: UploadFile = File(...), db: Sessio
         "characters_extracted": len(text),
         "findings_count": len(results) + len(ai_result.findings),
         "ai_status": ai_result.status,
+        "findings": [
+            {
+                "id": f.id,
+                "rule_id": f.rule_id,
+                "title": f.title,
+                "severity": f.severity,
+                "status": f.status,
+                "explanation": f.explanation,
+                "evidence": f.evidence,
+                "confidence": f.confidence,
+            }
+            for f in db.scalars(select(Finding).where(Finding.document_id == document.id)).all()
+        ],
     }
 
 @app.post("/api/v1/documents/{document_id}/process", dependencies=[Depends(require_demo_token)])
