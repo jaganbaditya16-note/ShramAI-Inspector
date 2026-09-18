@@ -88,3 +88,44 @@ Before demo/submission:
 - audit events are recorded
 - synthetic demo data is reproducible
 - README includes setup and architecture
+
+## Current MVP status
+
+The repository contains a working reference implementation for:
+- Next.js inspector workspace
+- FastAPI API
+- PostgreSQL/SQLAlchemy persistence
+- secure PDF/image upload validation
+- PDF text extraction and image OCR
+- versioned deterministic screening rules
+- optional local Ollama analysis with schema validation
+- provenance-aware local knowledge retrieval
+- evidence-linked findings
+- human review states
+- audit events
+- report generation
+- Docker Compose
+- CI checks
+
+### Run locally with Docker
+
+```bash
+docker compose up --build
+```
+
+Open:
+- Web: http://localhost:3000
+- API: http://localhost:8000
+- API docs: http://localhost:8000/docs
+
+### Optional local AI
+
+Set `OLLAMA_MODEL` to an installed local model and keep `OLLAMA_BASE_URL` pointed at the local Ollama service. If no model is configured or the model is unavailable, deterministic screening continues and the API reports the AI status rather than failing the inspection.
+
+### Production security gate
+
+Before real government or worker data is connected, replace demo authentication with an approved identity provider, use database migrations, private object storage/KMS, malware scanning, centralized secrets, production rate limiting, monitoring, backups, retention/deletion controls and formal security/privacy review.
+
+## Submission positioning
+
+ShramAI Inspector is designed around Digital Shram Sankalp Problem Statement #5. The prototype demonstrates the requested document-analysis workflow while deliberately keeping legal determination and enforcement decisions with authorized human reviewers.
