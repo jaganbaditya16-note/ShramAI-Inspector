@@ -3,12 +3,14 @@
 import Link from "next/link";
 import { use } from "react";
 import { usePathname } from "next/navigation";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, errorMessage, errorCode } from "@/lib/api";
 import type { Case } from "@/lib/types";
 import { queryKeys } from "@/lib/query-keys";
 import { CaseStatusBadge } from "@/components/ui/badge";
 import { InlineError, Skeleton } from "@/components/ui/feedback";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/components/ui/toast";
 import { IconDocType, IconFile, IconFlag, IconClock, IconShield } from "@/components/ui/icon";
 
 const TABS = [
@@ -53,6 +55,50 @@ export function useCase(caseId: string) {
   });
 }
 
+/** Close (draft -> closed) or reopen (closed -> draft) a case. The upload
+ * panel disables itself while a case is closed; reopening restores it. */
+function CaseLifecycleButton({ caseId, status }: { caseId: string; status: string }) {
+  const queryClient = useQueryClient();
+  const toast = useToast();
+  const mutation = useMutation({
+    mutationFn: (target: "closed" | "draft") =>
+      api.patch<Case>(`/cases/${caseId}`, { status: target }),
+    onSuccess: async (updated) => {
+      toast.showToast(
+        updated.status === "closed" ? "Case closed." : "Case reopened.",
+        "success",
+      );
+      await queryClient.invalidateQueries({ queryKey: queryKeys.case(caseId) });
+      await queryClient.invalidateQueries({ queryKey: ["cases"] });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.audit(caseId) });
+    },
+    onError: (error) => toast.showToast(errorMessage(error), "error"),
+  });
+
+  if (status === "closed") {
+    return (
+      <Button
+        size="sm"
+        variant="ghost"
+        loading={mutation.isPending}
+        onClick={() => mutation.mutate("draft")}
+      >
+        Reopen case
+      </Button>
+    );
+  }
+  return (
+    <Button
+      size="sm"
+      variant="secondary"
+      loading={mutation.isPending}
+      onClick={() => mutation.mutate("closed")}
+    >
+      Close case
+    </Button>
+  );
+}
+
 export default function CaseLayout({
   children,
   params,
@@ -92,6 +138,7 @@ export default function CaseLayout({
           </div>
           <div className="page-actions">
             <CaseStatusBadge status={caseData.status} />
+            <CaseLifecycleButton caseId={caseId} status={caseData.status} />
             <Link className="btn btn-secondary btn-sm" href="/cases">
               All cases
             </Link>

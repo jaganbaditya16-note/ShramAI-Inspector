@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import {
   createCaseViaApi,
   uniqueTitle,
+  expectDocumentStatus,
   DEMO_PDF,
   BROKEN_PDF,
 } from "./helpers";
@@ -164,4 +165,45 @@ test.describe("api failure and states", () => {
       .click();
     await expect(page.getByText(/nothing to screen|no findings/i).first()).toBeVisible();
   });
+});
+
+test("document deletion removes the row and the stored file access", async ({ page }) => {
+  const caseId = await createCaseViaApi(page.request, uniqueTitle("Edge Delete"));
+  await page.goto(`/cases/${caseId}`);
+  await page.locator('input[type="file"]').setInputFiles({
+    name: "deleteme.pdf",
+    mimeType: "application/pdf",
+    buffer: require("fs").readFileSync(DEMO_PDF),
+  });
+  await expect(page.getByRole("status")).toContainText(/deleteme\.pdf processed/i, {
+    timeout: 30_000,
+  });
+  await page
+    .getByRole("navigation", { name: "Case sections" })
+    .getByRole("link", { name: "Documents" })
+    .click();
+  await expectDocumentStatus(page, "deleteme.pdf", /Processed/i);
+
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole("button", { name: "Delete document" }).click();
+  await expect(page.getByRole("status")).toContainText(/document deleted/i);
+  await expect(page.getByText("No documents uploaded")).toBeVisible();
+  // the deleted document is gone for good: the detail endpoint 404s
+  await expect(page.getByRole("cell", { name: "deleteme.pdf" })).toHaveCount(0);
+});
+
+test("case can be closed and reopened from the case header", async ({ page }) => {
+  const caseId = await createCaseViaApi(page.request, uniqueTitle("Edge Lifecycle"));
+  await page.goto(`/cases/${caseId}`);
+  await page.getByRole("button", { name: "Close case" }).click();
+  await expect(page.getByRole("status")).toContainText(/case closed/i);
+  // closed state is reflected immediately, and uploads are disabled
+  await expect(page.getByRole("button", { name: "Reopen case" })).toBeVisible();
+  await expect(page.locator('input[type="file"]')).toBeDisabled();
+  await page.getByRole("button", { name: "Reopen case" }).click();
+  await expect(page.getByRole("status")).toContainText(/case reopened/i);
+  await expect(page.getByRole("button", { name: "Close case" })).toBeVisible();
+  await expect(page.locator('input[type="file"]')).toBeEnabled();
 });

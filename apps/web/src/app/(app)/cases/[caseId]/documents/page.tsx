@@ -18,6 +18,7 @@ export default function DocumentsPage({ params }: { params: Promise<{ caseId: st
   const queryClient = useQueryClient();
   const toast = useToast();
   const [reprocessTarget, setReprocessTarget] = useState<InspectorDocument | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<InspectorDocument | null>(null);
 
   const { data, isLoading, isError, error } = useQuery({
     queryKey: queryKeys.documents(caseId),
@@ -35,6 +36,22 @@ export default function DocumentsPage({ params }: { params: Promise<{ caseId: st
       setReprocessTarget(null);
       await queryClient.invalidateQueries({ queryKey: queryKeys.documents(caseId) });
       await queryClient.invalidateQueries({ queryKey: queryKeys.findings(caseId) });
+    },
+    onError: (mutationError) => toast.showToast(errorMessage(mutationError), "error"),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (documentId: string) => api.delete<void>(`/documents/${documentId}`),
+    onSuccess: async () => {
+      // The stored file is removed server-side first; the row, findings and
+      // model runs go with it. Audit events are preserved.
+      toast.showToast("Document deleted.", "success");
+      setDeleteTarget(null);
+      await queryClient.invalidateQueries({ queryKey: queryKeys.documents(caseId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.findings(caseId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.case(caseId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.audit(caseId) });
+      await queryClient.invalidateQueries({ queryKey: queryKeys.dashboard });
     },
     onError: (mutationError) => toast.showToast(errorMessage(mutationError), "error"),
   });
@@ -130,14 +147,24 @@ export default function DocumentsPage({ params }: { params: Promise<{ caseId: st
                   </td>
                   <td className="text-small text-muted">{formatDateTime(document.created_at)}</td>
                   <td>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={document.status === "queued" || document.status === "processing"}
-                      onClick={() => setReprocessTarget(document)}
-                    >
-                      Reprocess
-                    </Button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={document.status === "queued" || document.status === "processing"}
+                        onClick={() => setReprocessTarget(document)}
+                      >
+                        Reprocess
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="danger-secondary"
+                        disabled={document.status === "queued" || document.status === "processing"}
+                        onClick={() => setDeleteTarget(document)}
+                      >
+                        Delete
+                      </Button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -165,6 +192,29 @@ export default function DocumentsPage({ params }: { params: Promise<{ caseId: st
             onClick={() => reprocessTarget && reprocessMutation.mutate(reprocessTarget.id)}
           >
             Start reprocessing
+          </Button>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete document"
+        description="The stored file, extracted text, findings and model runs are permanently removed. Audit events are kept. This cannot be undone."
+      >
+        <p className="text-small text-muted">
+          {deleteTarget?.original_filename}
+        </p>
+        <div className="dialog-actions">
+          <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger-secondary"
+            loading={deleteMutation.isPending}
+            onClick={() => deleteTarget && deleteMutation.mutate(deleteTarget.id)}
+          >
+            Delete document
           </Button>
         </div>
       </Dialog>
