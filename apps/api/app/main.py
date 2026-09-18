@@ -47,6 +47,18 @@ async def security_headers(request: Request, call_next):
         response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     return response
 
+def screening_score(findings: list[Finding]) -> tuple[int, str]:
+    deductions = 0
+    for finding in findings:
+        weight = {"low": 5, "medium": 12, "high": 22}.get(finding.severity, 8)
+        if finding.status == "accepted":
+            deductions += weight
+        elif finding.status == "needs_review":
+            deductions += max(1, weight // 2)
+    score = max(0, min(100, 100 - deductions))
+    risk = "Low" if score >= 80 else "Moderate" if score >= 60 else "High"
+    return score, risk
+
 def case_out(case: Case) -> CaseOut:
     return CaseOut(
         id=case.id,
@@ -106,7 +118,57 @@ async def upload_document(case_id: str, file: UploadFile = File(...), db: Sessio
     db.commit()
     db.refresh(document)
     record(db, "document_uploaded", case_id, {"document_id": document.id, "filename": document.filename, "size": size})
-    return {"id": document.id, "filename": document.filename, "status": document.status}
+
+    db.execute(delete(Finding).where(Finding.document_id == document.id))
+    text = extract_text(document.path)
+    document.extracted_text = text
+    document.status = "processed" if text.strip() else "needs_ocr_or_manual_review"
+    results = run_rules(text)
+    for item in results:
+        db.add(Finding(
+            id=f"FND-{uuid4().hex[:12].upper()}",
+            case_id=document.case_id,
+            document_id=document.id,
+            rule_id=f"{item.rule_id}@{RULE_VERSION}",
+            title=item.title,
+            severity=item.severity,
+            status="needs_review",
+            explanation=item.explanation,
+            evidence=f"{document.filename}: {item.evidence}",
+            confidence=item.confidence,
+        ))
+    ai_result = await analyze(text)
+    for item in ai_result.findings:
+        db.add(Finding(
+            id=f"FND-{uuid4().hex[:12].upper()}",
+            case_id=document.case_id,
+            document_id=document.id,
+            rule_id=item.rule_id,
+            title=item.title,
+            severity=item.severity,
+            status="needs_review",
+            explanation=item.explanation,
+            evidence=f"{document.filename}: {item.evidence}",
+            confidence=item.confidence,
+        ))
+    case.status = "needs_review"
+    db.commit()
+    record(db, "document_processed", case_id, {
+        "document_id": document.id,
+        "text_extracted": bool(text.strip()),
+        "rule_version": RULE_VERSION,
+        "ai_status": ai_result.status,
+        "ai_findings": len(ai_result.findings),
+    })
+    return {
+        "id": document.id,
+        "filename": document.filename,
+        "status": document.status,
+        "processed": True,
+        "characters_extracted": len(text),
+        "findings_count": len(results) + len(ai_result.findings),
+        "ai_status": ai_result.status,
+    }
 
 @app.post("/api/v1/documents/{document_id}/process", dependencies=[Depends(require_demo_token)])
 async def process_document(document_id: str, db: Session = Depends(get_db)):
@@ -197,13 +259,16 @@ def generate_report(case_id: str, db: Session = Depends(get_db)):
         raise HTTPException(404, "Case not found")
     findings = db.scalars(select(Finding).where(Finding.case_id == case_id)).all()
     unresolved = sum(1 for f in findings if f.status == "needs_review")
+    score, risk = screening_score(findings)
     return {
         "case_id": case.id,
         "case_name": case.name,
         "rule_version": RULE_VERSION,
         "finding_count": len(findings),
         "unresolved_findings": unresolved,
-        "disclaimer": "AI-assisted screening output. Final compliance determination remains with the authorized human reviewer.",
+        "screening_score": score,
+        "risk_level": risk,
+        "disclaimer": "Screening score is a transparent prioritization aid based only on configured findings and review status. It is not a legal compliance score or enforcement decision.",
         "findings": [
             {"id": f.id, "rule_id": f.rule_id, "title": f.title, "severity": f.severity, "status": f.status, "confidence": f.confidence, "evidence": f.evidence, "explanation": f.explanation}
             for f in findings
