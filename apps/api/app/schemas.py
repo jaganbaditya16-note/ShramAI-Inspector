@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 class HealthResponse(BaseModel):
     status: str
@@ -9,6 +9,7 @@ class CaseCreate(BaseModel):
     establishment_reference: str | None = Field(default=None, max_length=120)
 
 class CaseOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: str
     name: str
     status: str
@@ -19,6 +20,7 @@ class CaseList(BaseModel):
     items: list[CaseOut]
 
 class FindingOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
     id: str
     rule_id: str
     title: str
@@ -26,7 +28,7 @@ class FindingOut(BaseModel):
     status: str
     explanation: str
     evidence: str
-    confidence: int
+    confidence: int = Field(ge=0, le=100)
 
 class FindingUpdate(BaseModel):
     status: str = Field(pattern="^(accepted|rejected|needs_review)$")
