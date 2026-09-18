@@ -44,3 +44,23 @@ jobs:
         run: docker build -f apps/api/Dockerfile -t shramai-api-local:ci .
       - name: Build web container
         run: docker build -t shramai-web:ci apps/web
+      - name: Smoke test API container
+        run: |
+          docker run -d --name shramai-api-smoke -p 18000:80 shramai-api:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:18000/api/v1/health >/tmp/api-health.json; then break; fi
+            sleep 2
+          done
+          cat /tmp/api-health.json
+          curl -fsS http://127.0.0.1:18000/api/docs >/tmp/api-docs.html
+          grep -q "ShramAI Inspector API" /tmp/api-docs.html
+          docker rm -f shramai-api-smoke
+      - name: Smoke test web container
+        run: |
+          docker run -d --name shramai-web-smoke -p 13000:3000 shramai-web:ci
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:13000/ >/tmp/web.html; then break; fi
+            sleep 2
+          done
+          grep -q "ShramAI" /tmp/web.html
+          docker rm -f shramai-web-smoke
