@@ -117,7 +117,7 @@ docker compose up --build
 Open:
 - Web: http://localhost:3000
 - API: http://localhost:8000
-- API docs: http://localhost:8000/docs
+- API docs: http://localhost:8000/api/docs
 
 ### Optional local AI
 
