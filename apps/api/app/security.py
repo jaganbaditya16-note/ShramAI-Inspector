@@ -1,7 +1,12 @@
 from fastapi import Header, HTTPException, Request
 from .core.config import settings
 
-PUBLIC_PATHS = {"/api/v1/health", "/docs", "/openapi.json", "/redoc"}
+PUBLIC_PATHS = {
+    "/api/v1/health",
+    "/api/docs",
+    "/api/openapi.json",
+    "/api/redoc",
+}
 
 def require_demo_token(request: Request, authorization: str | None = Header(default=None)):
     configured = getattr(settings, "demo_auth_token", "")
