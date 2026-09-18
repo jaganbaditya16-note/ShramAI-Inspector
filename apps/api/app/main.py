@@ -20,7 +20,7 @@ from .services.rules import RULE_VERSION, run_rules
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="ShramAI Inspector API", version="0.2.0")
+app = FastAPI(title="ShramAI Inspector API", version="0.2.0", docs_url="/api/docs", redoc_url="/api/redoc", openapi_url="/api/openapi.json")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[x.strip() for x in settings.allowed_origins.split(",") if x.strip()],
