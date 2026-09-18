@@ -1,17 +1,16 @@
 # Web
 
-Next.js frontend.
+Next.js 16 inspector dashboard for the ShramAI Inspector prototype.
 
-Primary screens:
+Implemented screens:
+- Overview and screening score
+- Findings review with accept/dismiss
+- Document register
+- Audit trail
+- Case creation
+- PDF/PNG/JPEG upload with drag-and-drop
+- Scorecard generation and JSON export
 
-- Dashboard
-- Cases
-- New Inspection
-- Document Review
-- Findings Review
-- Evidence Viewer
-- Report
-- Audit Trail
-- Settings
+The browser calls the FastAPI API through `NEXT_PUBLIC_API_BASE_URL`, defaulting to same-origin `/api/v1` for the Vercel deployment.
 
-Frontend treats the API as the source of truth; authorization decisions are never trusted to the browser.
+The UI is intentionally assistive: findings are screening signals and the final compliance determination remains with the authorized human reviewer.
