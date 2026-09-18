@@ -72,6 +72,41 @@ class ExtractionFailure(AppError):
     code = "extraction_failed"
 
 
+class InfectedDocument(AppError):
+    """The upload matched a malware signature (rejected, never processed)."""
+
+    status_code = 400
+    code = "infected_document"
+
+
+class ScanUnavailable(AppError):
+    """Fail-closed: no malware scanner could be reached (enforcing mode)."""
+
+    status_code = 503
+    code = "scan_unavailable"
+
+
+class ScanTimeout(AppError):
+    """Fail-closed: the malware scanner did not respond in time."""
+
+    status_code = 503
+    code = "scan_timeout"
+
+
+class ScanFailed(AppError):
+    """Fail-closed: the malware scanner errored mid-scan."""
+
+    status_code = 503
+    code = "scan_failed"
+
+
+class ScanStreamLimit(AppError):
+    """Fail-closed: upload exceeds the scanner's own stream size limit."""
+
+    status_code = 413
+    code = "scan_stream_limit"
+
+
 def error_envelope(code: str, message: str, request_id: str,
                    details: dict[str, Any] | None = None) -> dict[str, Any]:
     body: dict[str, Any] = {

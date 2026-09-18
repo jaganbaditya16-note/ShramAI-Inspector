@@ -13,6 +13,7 @@ UPLOAD → FILE VALIDATION → STORAGE → REGISTRATION (202 + job)
 | Stage | Implementation | Failure behaviour |
 |---|---|---|
 | Validation | extension + MIME + magic bytes + PDF EOF marker, streaming size bound | `400 upload_rejected` / `413`; nothing persisted |
+| Malware scan | validate → scan → store. `MalwareScanner` interface; ClamAV clamd INSTREAM adapter streams the upload in 64 KiB chunks. `MALWARE_SCAN_MODE=off` (dev/demo default) records `scan_status=skipped` — it never claims clean; `enforcing` requires a configured scanner and is fail-closed | infected → `400 infected_document`, document `rejected` (signature + sha256 kept, bytes never stored); unavailable/timeout/error → `503`, oversize-for-scanner → `413`; nothing persisted; audit event for every verdict. Pipeline also refuses any document without `scan_status ∈ {clean, skipped}` (job fails + audit `document_processing_blocked`) |
 | Storage | `DocumentStore` protocol; UUID date-partitioned keys; sha256 | storage errors → 500 envelope, transaction rolled back |
 | Registration | `documents` row (`queued`) + `processing_jobs` row, audit event in the same transaction | — |
 | Extraction | pypdf text layer per page; scanned PDFs → pypdfium2 raster + Tesseract OCR (page/scale bounded); images → PIL verify + OCR. Runs in a worker thread. | `extraction_failed` → document `failed` with safe message + audit |

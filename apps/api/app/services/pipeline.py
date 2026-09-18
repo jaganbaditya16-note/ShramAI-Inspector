@@ -117,6 +117,28 @@ async def run_pipeline(db: Session, document_id: str, job_id: str) -> PipelineOu
         logger.error("event=pipeline_missing_entities document=%s job=%s", document_id, job_id)
         return PipelineOutcome(document_status="failed")
 
+    # Security gate: documents whose malware scan did not pass must never
+    # enter extraction/OCR/AI processing (defense in depth — the reprocess
+    # endpoint checks this too, but the pipeline must not trust callers).
+    if document.scan_status not in {"clean", "skipped"}:
+        job.status = "failed"
+        job.error = "Security scan did not pass; processing is refused for this document."
+        job.attempts += 1
+        job.finished_at = utcnow()
+        db.commit()
+        audit_service.record(
+            db,
+            action="document_processing_blocked",
+            org_id=document.org_id,
+            case_id=document.case_id,
+            detail={"document_id": document.id, "scan_status": document.scan_status},
+        )
+        logger.warning(
+            "event=document_processing_blocked document=%s scan_status=%s",
+            document.id, document.scan_status,
+        )
+        return PipelineOutcome(document_status="failed")
+
     job.status = "running"
     job.started_at = job.started_at or utcnow()
     job.attempts += 1

@@ -32,6 +32,9 @@ class DocumentOut(BaseModel):
     extraction_method: str
     doc_type: str
     doc_type_confidence: int
+    scan_status: str = "not_scanned"
+    scan_signature: str | None = None
+    scan_note: str | None = None
     created_at: datetime
     processed_at: datetime | None
     job: JobOut | None = None

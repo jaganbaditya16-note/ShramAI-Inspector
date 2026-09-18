@@ -88,6 +88,21 @@ with a **local** Ollama model — document text never leaves the deployment host
 If the model is unavailable, deterministic screening continues unaffected and the
 API reports AI status honestly (`disabled` / `unavailable`).
 
+## Malware scanning
+
+Uploads can pass through an optional malware-scan stage before any bytes are
+stored or processed:
+
+- `MALWARE_SCAN_MODE=off` (default, local/demo): uploads are marked
+  `scan_status=skipped` — never claimed clean — and production boot refuses to
+  run with scanning off.
+- `MALWARE_SCAN_MODE=enforcing`: every upload is streamed to a ClamAV daemon
+  (`CLAMD_HOST`, default port `3310`). Infected files are rejected and never
+  stored; if the scanner is unreachable, times out or errors the upload is
+  blocked (fail-closed) and reported via `/api/v1/health`.
+
+See [security baseline](docs/security/security.md) for the control detail.
+
 ## Quality gates
 
 Every push runs GitHub Actions:

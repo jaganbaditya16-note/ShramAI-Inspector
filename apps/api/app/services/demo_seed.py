@@ -70,7 +70,16 @@ async def seed_demo_case(db: Session, org: Organization, user: User) -> None:
     db.add(case)
     db.flush()
 
+    from .malware import scan_upload
+
     pdf = build_synthetic_pdf()
+    scan_result = await scan_upload(pdf, "synthetic-demo-payslip.pdf")
+    if not scan_result.passed:
+        logger.warning(
+            "event=demo_seed_scan_blocked verdict=%s", scan_result.verdict.value
+        )
+        return
+
     key = get_store().save(pdf, ".pdf")
     document = Document(
         org_id=org.id,
@@ -81,6 +90,9 @@ async def seed_demo_case(db: Session, org: Organization, user: User) -> None:
         size_bytes=len(pdf),
         sha256=hashlib.sha256(pdf).hexdigest(),
         status="queued",
+        scan_status=scan_result.verdict.value,
+        scan_engine=scan_result.engine,
+        scan_note=(scan_result.note or "")[:200] or None,
         created_by=user.id,
     )
     db.add(document)

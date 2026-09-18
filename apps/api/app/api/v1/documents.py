@@ -48,6 +48,9 @@ def _document_out(document: Document, job: ProcessingJob | None) -> DocumentOut:
         doc_type_confidence=document.doc_type_confidence,
         created_at=document.created_at,
         processed_at=document.processed_at,
+        scan_status=document.scan_status,
+        scan_signature=document.scan_signature,
+        scan_note=document.scan_note,
         job=_job_out(job),
     )
 
@@ -64,7 +67,7 @@ async def upload_document(
     if case.status == "closed":
         raise Conflict("Reopen the case before uploading documents.")
     data = await read_bounded_upload(file)
-    document, job = document_service.persist_upload(
+    document, job = await document_service.persist_upload(
         db, principal, case,
         data=data,
         declared_content_type=file.content_type,
@@ -125,6 +128,10 @@ async def reprocess_document(document_id: str, db: Session = Depends(get_db),
     )
     if active is not None:
         raise Conflict("A processing job is already running for this document.")
+    if document.scan_status not in {"clean", "skipped"}:
+        raise Conflict(
+            "This document cannot be processed because its security scan did not pass."
+        )
     job = ProcessingJob(org_id=principal.org_id, document_id=document.id, status="queued")
     db.add(job)
     document.status = "queued"
@@ -154,6 +161,8 @@ def download_document(document_id: str, db: Session = Depends(get_db),
     """Authorised streaming of the stored original. Storage keys are server
     generated and access is re-checked on every request (no unsigned URLs)."""
     document = document_service.get_document_or_404(db, principal, document_id)
+    if not document.storage_key or document.status == "rejected":
+        raise NotFound("No stored file exists for this document (security-scan rejected).")
     path = document_service.get_store().open_path(document.storage_key)
     if not path.is_file():
         raise NotFound("Stored file is missing; the document may need re-upload.")

@@ -26,6 +26,11 @@ services:
       STORAGE_DIR: /app/storage
       KNOWLEDGE_DIR: /app/data/knowledge
       RATE_LIMIT_ENABLED: "true"
+      # Optional malware scanning: uncomment MALWARE_SCAN_MODE/CLAMD_HOST and
+      # the clamav service below to stream uploads through ClamAV.
+      # MALWARE_SCAN_MODE: enforcing
+      # CLAMD_HOST: clamd
+      # CLAMD_PORT: 3310
     ports:
       - "8000:8000"
     depends_on:
@@ -48,3 +53,10 @@ services:
 volumes:
   postgres_data:
   document_storage:
+
+# Optional ClamAV sidecar for malware scanning (MALWARE_SCAN_MODE=enforcing).
+# Uncomment to enable; signatures update via the image's freshclam config.
+#  clamd:
+#    image: clamav/clamav:latest
+#    ports:
+#      - "3310:3310"

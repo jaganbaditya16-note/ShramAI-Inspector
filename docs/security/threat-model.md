@@ -13,6 +13,7 @@ and review decisions · audit history · credentials/sessions · rule/model prov
 | Spoofing | credential guessing | Argon2id; uniform failures; auth rate limit ✔; SSO/MFA = deployment |
 | Tampering | finding/review forgery | server-side role checks; reviewer + timestamp stamping; audit trail ✔ |
 | Tampering | malicious file alters parser | magic/EOF validation; bounded extraction; parser errors contained ✔ |
+| Tampering | malware uploaded then distributed/stored | pre-storage malware scan stage (clamd INSTREAM); infected → rejected, never stored or processed; scanner down ⇒ fail-closed (upload blocked) ✔ (tested) |
 | Repudiation | "I never confirmed that" | append-only audit events with actor + request id ✔ |
 | Information disclosure | IDOR / cross-tenant reads | org-scoped queries everywhere; indistinguishable 404s ✔ (tested) |
 | Information disclosure | predictable document URLs | server-generated keys; authorised download endpoint re-checks access ✔ |
@@ -32,7 +33,10 @@ and review decisions · audit history · credentials/sessions · rule/model prov
 - In-process rate limiting is per-instance; use a gateway/Redis when scaling out.
 - Local-disk document storage is demo-grade; production must attach durable
   encrypted object storage via the `DocumentStore` protocol.
-- No malware scanning yet — deployment-stage control.
+- Malware scanning defaults to `off` for local/demo development and must be
+  enabled (`MALWARE_SCAN_MODE=enforcing` + a reachable clamd host) in
+  production; the daemon itself is a deployment concern. Signatures update on
+  the clamd side (freshclam), not in this codebase.
 - Demo mode (`AUTH_MODE=demo`) is unauthenticated by design and restricted to
   synthetic data operationally; misuse with real documents is a policy violation,
   not a code gap — production deployments must set `AUTH_MODE=required`.

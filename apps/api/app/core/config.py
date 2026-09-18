@@ -73,6 +73,16 @@ class Settings(BaseSettings):
     demo_org_name: str = "Inspectorate Demo Organisation"
     demo_user_name: str = "Demo Inspector"
 
+    # --- Malware scanning -----------------------------------------------------
+    # off: explicit development/demo mode (documents marked skipped; forbidden
+    # in production via a startup check). enforcing: a clamd scanner must be
+    # configured and reachable; failures fail CLOSED (uploads rejected).
+    malware_scan_mode: Literal["off", "enforcing"] = "off"
+    clamd_host: str = ""  # clamd TCP host; empty = not configured
+    clamd_port: int = Field(default=3310, ge=1, le=65535)
+    malware_scan_timeout_seconds: float = Field(default=10, ge=1, le=120)
+    malware_scan_stream_chunk: int = Field(default=65536, ge=4096, le=1048576)
+
     # --- Background pipeline -----------------------------------------------------
     pipeline_mode: PipelineMode = "background"
     pipeline_concurrency: int = Field(default=2, ge=1, le=16)

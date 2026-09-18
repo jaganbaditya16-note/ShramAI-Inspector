@@ -43,8 +43,21 @@ logger = get_logger(__name__)
 configure_logging(settings.log_level, settings.log_format)
 
 
+def validate_security_config() -> None:
+    """Fail fast on unsafe security configuration (never start in a posture
+    that would silently process unscanned documents in production)."""
+    if settings.is_production and settings.malware_scan_mode == "off":
+        raise RuntimeError(
+            "MALWARE_SCAN_MODE=off is forbidden in production. "
+            "Configure a clamd scanner (CLAMD_HOST) and set MALWARE_SCAN_MODE=enforcing."
+        )
+    if settings.malware_scan_mode == "enforcing" and not settings.clamd_host.strip():
+        raise RuntimeError("MALWARE_SCAN_MODE=enforcing requires CLAMD_HOST to be configured.")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    validate_security_config()
     if settings.effective_auto_create:
         Base.metadata.create_all(bind=engine)
     with SessionLocal() as db:

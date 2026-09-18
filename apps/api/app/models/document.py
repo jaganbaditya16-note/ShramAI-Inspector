@@ -24,9 +24,16 @@ class Document(Base):
     content_type: Mapped[str] = mapped_column(String(100))
     size_bytes: Mapped[int] = mapped_column(Integer)
     sha256: Mapped[str] = mapped_column(String(64), index=True)
-    # queued -> processing -> processed | failed
+    # queued -> processing -> processed | failed ; rejected = malware scan failed
     status: Mapped[str] = mapped_column(String(24), default="queued", index=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Malware scan outcome (see services/malware). Only "clean"/"skipped" may
+    # enter extraction/OCR/AI processing — enforced by the pipeline gate.
+    scan_status: Mapped[str] = mapped_column(String(16), default="not_scanned", index=True)
+    scan_engine: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    scan_signature: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    scan_note: Mapped[str | None] = mapped_column(String(200), nullable=True)
     page_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
     text_chars: Mapped[int] = mapped_column(Integer, default=0)
     extraction_method: Mapped[str] = mapped_column(String(20), default="none")
