@@ -4,7 +4,7 @@ from uuid import uuid4
 from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from .core.config import settings
@@ -329,7 +329,7 @@ def dashboard_summary(db: Session = Depends(get_db)):
     score, risk = screening_score(findings)
     return {
         "cases": len(cases),
-        "documents": db.scalar(select(Document).count()) if False else len(db.scalars(select(Document)).all()),
+        "documents": db.scalar(select(func.count(Document.id))) or 0,
         "findings": len(findings),
         "accepted": accepted,
         "rejected": rejected,
