@@ -21,3 +21,9 @@ coverage/
 /apps/api/storage/
 bootstrap_admin_credentials.txt
 .vercel
+
+# Playwright (browser E2E)
+apps/web/e2e-artifacts/
+apps/web/e2e-report/
+apps/web/.next-demo/
+apps/web/.next-auth/
