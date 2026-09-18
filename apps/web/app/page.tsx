@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, DragEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, CSSProperties, DragEvent, useEffect, useMemo, useState } from 'react';
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL || '/api/v1';
 
@@ -279,7 +279,7 @@ export default function Home(){
           <section className="card scoreCard">
             <div className="cardHead"><div><span className="mini">RISK SCREENING</span><h2>Compliance screening</h2></div><span className="badge blue">Human review</span></div>
             <div className="scoreRow">
-              <div className="ring" style={{'--score':`${score}%`} as React.CSSProperties}><strong>{score}</strong><span>/100</span></div>
+              <div className="ring" style={{'--score':`${score}%`} as CSSProperties}><strong>{score}</strong><span>/100</span></div>
               <div><h3>{risk} screening risk</h3><p>Prioritization aid based on configured findings and review status. It is not a legal compliance determination.</p><button className="darkBtn" onClick={()=>void generate()} disabled={busy}>Generate scorecard →</button></div>
             </div>
           </section>
