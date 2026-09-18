@@ -1,7 +1,24 @@
 from pathlib import Path
+import os
 import re
 
-KNOWLEDGE_DIR = Path(__file__).resolve().parents[4] / "data" / "knowledge"
+def _knowledge_dir() -> Path:
+    configured = os.getenv("KNOWLEDGE_DIR", "").strip()
+    if configured:
+        return Path(configured)
+
+    source = Path(__file__).resolve()
+    candidates = [
+        source.parents[4] / "data" / "knowledge",
+        source.parents[3] / "data" / "knowledge",
+        source.parents[2] / "data" / "knowledge",
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate
+    return candidates[0]
+
+KNOWLEDGE_DIR = _knowledge_dir()
 
 def retrieve(query: str, limit: int = 4) -> list[str]:
     if not query.strip() or not KNOWLEDGE_DIR.exists():
