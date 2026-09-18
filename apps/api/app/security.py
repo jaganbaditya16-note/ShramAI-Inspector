@@ -1,4 +1,5 @@
 from fastapi import Header, HTTPException, Request
+
 from .core.config import settings
 
 PUBLIC_PATHS = {

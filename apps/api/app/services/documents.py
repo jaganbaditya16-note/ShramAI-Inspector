@@ -1,6 +1,8 @@
 from pathlib import Path
 from uuid import uuid4
-from fastapi import UploadFile, HTTPException
+
+from fastapi import HTTPException, UploadFile
+
 from ..core.config import settings
 
 ALLOWED = {

@@ -21,20 +21,25 @@ services:
       dockerfile: apps/api/Dockerfile
     environment:
       DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/shramai
-      API_PORT: 8000
-      ALLOWED_ORIGINS: http://localhost:3000
       APP_ENV: development
+      AUTH_MODE: demo # set "required" + bootstrap admin credentials for shared use
+      STORAGE_DIR: /app/storage
       KNOWLEDGE_DIR: /app/data/knowledge
+      RATE_LIMIT_ENABLED: "true"
     ports:
       - "8000:8000"
     depends_on:
       db:
         condition: service_healthy
+    volumes:
+      - document_storage:/app/storage
 
   web:
-    build: ./apps/web
-    environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:8000/api/v1
+    build:
+      context: ./apps/web
+      args:
+        # Server-side rewrite target: the API container (never the browser).
+        API_ORIGIN: http://api:8000
     ports:
       - "3000:3000"
     depends_on:
@@ -42,3 +47,4 @@ services:
 
 volumes:
   postgres_data:
+  document_storage:

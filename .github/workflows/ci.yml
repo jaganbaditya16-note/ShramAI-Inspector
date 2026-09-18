@@ -12,13 +12,48 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: shramai_ci
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - "5432:5432"
+        options: >-
+          --health-cmd "pg_isready -U postgres -d shramai_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install -r requirements.txt pytest
-      - run: pytest -q
+          cache: pip
+          cache-dependency-path: apps/api/requirements*.txt
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+      - name: Lint (ruff)
+        run: ruff check app tests
+      - name: Verify migrations against PostgreSQL
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/shramai_ci
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+      - name: Unit, integration and security tests (SQLite)
+        run: pytest -q
+      - name: Integration tests against PostgreSQL
+        env:
+          DATABASE_URL: postgresql+psycopg://postgres:postgres@127.0.0.1:5432/shramai_ci
+          APP_ENV: development
+        run: pytest -q tests/integration
+      - name: Dependency audit (informational)
+        run: pip-audit -r requirements.txt
+        continue-on-error: true
 
   web:
     runs-on: ubuntu-latest
@@ -30,8 +65,16 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: npm install
-      - run: npm run build
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Lint (eslint)
+        run: npm run lint
+      - name: Type check (tsc)
+        run: npm run typecheck
+      - name: Production build
+        run: npm run build
 
   containers:
     runs-on: ubuntu-latest
@@ -39,28 +82,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build API production container
-        run: docker build -f apps/api/Dockerfile.vercel -t shramai-api:ci apps/api
-      - name: Build local API container
-        run: docker build -f apps/api/Dockerfile -t shramai-api-local:ci .
+        run: docker build -f apps/api/Dockerfile -t shramai-api:ci .
+      - name: Build API Vercel container
+        run: docker build -f apps/api/Dockerfile.vercel -t shramai-api-vercel:ci apps/api
       - name: Build web container
-        run: docker build -t shramai-web:ci apps/web
-      - name: Smoke test API container
+        run: docker build -f apps/web/Dockerfile -t shramai-web:ci apps/web
+      - name: Smoke test API container (migrations + health)
         run: |
-          docker run -d --name shramai-api-smoke -p 18000:80 shramai-api:ci
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:18000/api/v1/health >/tmp/api-health.json; then break; fi
+          docker run -d --name shramai-api-smoke -p 18000:8000 \
+            -e APP_ENV=development -e AUTH_MODE=demo -e RATE_LIMIT_ENABLED=false \
+            shramai-api:ci
+          ok=""
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:18000/api/v1/health >/tmp/api-health.json 2>/dev/null; then ok=1; break; fi
             sleep 2
           done
+          if [ -z "$ok" ]; then docker logs shramai-api-smoke; exit 1; fi
           cat /tmp/api-health.json
-          curl -fsS http://127.0.0.1:18000/api/docs >/tmp/api-docs.html
-          grep -q "ShramAI Inspector API" /tmp/api-docs.html
+          curl -fsS http://127.0.0.1:18000/api/v1/cases | grep -q "Demo Factory Inspection"
+          curl -fsS http://127.0.0.1:18000/api/docs | grep -q "ShramAI Inspector API"
           docker rm -f shramai-api-smoke
       - name: Smoke test web container
         run: |
           docker run -d --name shramai-web-smoke -p 13000:3000 shramai-web:ci
-          for i in $(seq 1 30); do
-            if curl -fsS http://127.0.0.1:13000/ >/tmp/web.html; then break; fi
+          ok=""
+          for i in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:13000/dashboard >/tmp/web.html 2>/dev/null; then ok=1; break; fi
             sleep 2
           done
-          grep -q "ShramAI" /tmp/web.html
+          if [ -z "$ok" ]; then docker logs shramai-web-smoke; exit 1; fi
+          grep -q "ShramAI Inspector" /tmp/web.html
           docker rm -f shramai-web-smoke

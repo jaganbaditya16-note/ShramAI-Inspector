@@ -8,9 +8,14 @@ __pycache__/
 !.env.example
 *.log
 coverage/
+*.tsbuildinfo
 .pytest_cache/
+.ruff_cache/
 .DS_Store
-shramai.db
+*.db
 *.sqlite
+*.db-wal
+*.db-shm
 storage/
-.env.local
+bootstrap_admin_credentials.txt
+.vercel

@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 
+
 class HealthResponse(BaseModel):
     status: str
     version: str

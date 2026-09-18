@@ -1,0 +1,31 @@
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes
+    "I",           # isort
+    "B",           # bugbear
+    "UP",          # pyupgrade
+    "SIM",         # simplify
+    "C4",          # comprehensions
+    "RUF",         # ruff-specific
+]
+ignore = [
+    "B008",        # Depends() in defaults is the FastAPI idiom
+    "RUF012",      # mutable class attrs in pydantic models are fine
+    "SIM117",      # nested with in tests
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    "ignore::DeprecationWarning:pypdf.*",
+]

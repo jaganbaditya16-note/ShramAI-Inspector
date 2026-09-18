@@ -1,10 +1,13 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
+
 from .db import Base
 
+
 def now_utc():
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 class Case(Base):
     __tablename__ = "cases"
