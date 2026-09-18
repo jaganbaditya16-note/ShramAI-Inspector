@@ -251,13 +251,37 @@ def purge_expired_sessions(db: Session, *, now: datetime | None = None) -> int:
 
 
 def run_retention_sweep(db: Session) -> PurgeReport:
-    """One bounded sweep: documents → cases → sessions. Cheap, idempotent."""
-    report = purge_expired_documents(db)
-    cases_report = purge_expired_cases(db)
-    report.cases_purged = cases_report.cases_purged
-    report.cases_deferred = cases_report.cases_deferred
-    report.errors.extend(cases_report.errors)
-    report.sessions_purged = purge_expired_sessions(db)
+    """One bounded sweep: documents → cases → sessions. Cheap, idempotent.
+
+    Every stage is error-isolated with a rollback: retention must never take
+    the API down, whatever state the database is in."""
+    report = PurgeReport()
+    stages: tuple[tuple[str, object], ...] = (
+        ("documents", purge_expired_documents),
+        ("cases", purge_expired_cases),
+    )
+    for name, stage in stages:
+        try:
+            stage_report = stage(db)
+        except Exception:
+            db.rollback()
+            logger.exception("event=retention_stage_failed stage=%s", name)
+            report.errors.append(f"stage {name} failed (see logs)")
+            continue
+        if name == "documents":
+            report.documents_purged = stage_report.documents_purged
+            report.documents_deferred = stage_report.documents_deferred
+            report.skipped_active_jobs = stage_report.skipped_active_jobs
+        else:
+            report.cases_purged = stage_report.cases_purged
+            report.cases_deferred = stage_report.cases_deferred
+        report.errors.extend(stage_report.errors)
+    try:
+        report.sessions_purged = purge_expired_sessions(db)
+    except Exception:
+        db.rollback()
+        logger.exception("event=retention_stage_failed stage=sessions")
+        report.errors.append("stage sessions failed (see logs)")
     if report.documents_purged or report.cases_purged or report.sessions_purged:
         logger.info(
             "event=retention_sweep documents=%d cases=%d sessions=%d deferred=%d",

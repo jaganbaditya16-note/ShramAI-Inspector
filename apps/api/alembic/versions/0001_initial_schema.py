@@ -192,7 +192,9 @@ def upgrade() -> None:
 
     op.create_table(
         "audit_events",
-        sa.Column("id", sa.BigInteger(), primary_key=True, autoincrement=True),
+        # INTEGER (not BIGINT) on SQLite so the id stays a rowid alias with
+        # autoincrement behaviour; identical BIGINT on PostgreSQL.
+        sa.Column("id", sa.BigInteger().with_variant(sa.Integer(), "sqlite"), primary_key=True, autoincrement=True),
         sa.Column("org_id", sa.String(36), nullable=True),
         sa.Column("case_id", sa.String(36), nullable=True),
         sa.Column("actor_user_id", sa.String(36), nullable=True),
