@@ -1,7 +1,7 @@
 from pathlib import Path
 import re
 
-KNOWLEDGE_DIR = Path(__file__).resolve().parents[3] / "data" / "knowledge"
+KNOWLEDGE_DIR = Path(__file__).resolve().parents[4] / "data" / "knowledge"
 
 def retrieve(query: str, limit: int = 4) -> list[str]:
     if not query.strip() or not KNOWLEDGE_DIR.exists():
