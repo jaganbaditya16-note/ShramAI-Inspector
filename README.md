@@ -24,16 +24,16 @@ Digital Shram Sankalp — Problem Statement #5: AI-Driven Smart Inspection Syste
 - Public demo data must be synthetic/redacted.
 
 ## MVP flow
-1. Sign in as an authorized demo inspector.
-2. Create an inspection case.
+1. Open the demo inspector workspace.
+2. Create an inspection case or use the synthetic demo case.
 3. Upload supported labour documents (PDF/JPG/PNG).
-4. Run OCR/document extraction.
-5. Review extracted fields and correct them when necessary.
-6. Run compliance checks.
-7. Review findings with evidence and confidence.
-8. Assign severity and disposition during human review.
-9. Generate a signed/auditable inspection report.
-10. View case analytics.
+4. Extract text from digital PDFs and OCR scanned PDFs/images.
+5. Run deterministic screening checks and optional local AI analysis.
+6. Review findings with evidence and confidence.
+7. Accept or dismiss findings during human review.
+8. Generate a transparent screening scorecard.
+9. Export the scorecard as JSON.
+10. View documents and audit activity.
 
 ## Monorepo structure
 ```
@@ -58,18 +58,19 @@ scripts/
 tests/
 ```
 
-## Planned API
-- `POST /api/v1/cases`
+## Implemented API
+- `GET /api/v1/health`
 - `GET /api/v1/cases`
+- `POST /api/v1/cases`
+- `GET /api/v1/cases/{case_id}`
 - `POST /api/v1/cases/{case_id}/documents`
 - `POST /api/v1/documents/{document_id}/process`
-- `GET /api/v1/documents/{document_id}/extractions`
-- `POST /api/v1/cases/{case_id}/checks`
+- `GET /api/v1/cases/{case_id}/documents`
 - `GET /api/v1/cases/{case_id}/findings`
 - `PATCH /api/v1/findings/{finding_id}`
-- `POST /api/v1/cases/{case_id}/report`
+- `GET /api/v1/cases/{case_id}/audit`
 - `GET /api/v1/dashboard/summary`
-- `GET /api/v1/health`
+- `POST /api/v1/cases/{case_id}/report`
 
 ## Non-goals for MVP
 - Direct production integration with government systems without authorization.
@@ -96,7 +97,7 @@ The repository contains a working reference implementation for:
 - FastAPI API
 - PostgreSQL/SQLAlchemy persistence
 - secure PDF/image upload validation
-- PDF text extraction and image OCR
+- PDF text extraction, scanned-PDF OCR and image OCR
 - versioned deterministic screening rules
 - optional local Ollama analysis with schema validation
 - provenance-aware local knowledge retrieval
@@ -145,6 +146,6 @@ The repository includes a root `vercel.json` configured for Vercel Services:
 
 This keeps the public product on one domain. Vercel Services requires the Vercel project framework to be set to **Services**. Vercel's current documentation describes this model for a Next.js frontend plus FastAPI backend on one deployment URL.
 
-For the public prototype, the backend tolerates blank environment variables and uses a temporary SQLite database under Vercel's ephemeral filesystem. This is demo-only: persistent PostgreSQL and durable object storage must be configured before handling real worker records. The API container includes Tesseract so image OCR can run in the deployed prototype.
+For the public prototype, the backend tolerates blank environment variables and uses a temporary SQLite database under Vercel's ephemeral filesystem. This is demo-only: Vercel containers are stateless, so durable PostgreSQL and private object storage must be configured before handling real worker records. The API container includes Tesseract plus PDFium so image OCR and scanned-PDF OCR can run in the deployed prototype.
 
 The browser uses the same-origin `/api/v1` path in production, so it does not call `localhost:8000`.
