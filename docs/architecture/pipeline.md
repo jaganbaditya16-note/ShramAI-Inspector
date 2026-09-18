@@ -34,6 +34,10 @@ UPLOAD → FILE VALIDATION → STORAGE → REGISTRATION (202 + job)
   environments where background work cannot outlive the request.
 - **Restart recovery**: at startup, jobs stuck in `queued`/`running` are marked
   failed with "interrupted by service restart" — clients can reprocess.
+- **Deletion safety**: retention purges remove the storage object before the
+  document row; documents with queued/running jobs are never purged, and the
+  pipeline fails safely when a document vanishes mid-flight (deleted data is
+  never revived). See [data lifecycle](data-lifecycle.md).
 - **Limits**: `MAX_PDF_PAGES_TEXT`, `MAX_PAGES_OCR`, `OCR_DPI_SCALE`,
   `MAX_EXTRACT_CHARS`, `MAX_UPLOAD_MB` — tuned to bound memory and CPU against
   hostile or accidental large inputs.

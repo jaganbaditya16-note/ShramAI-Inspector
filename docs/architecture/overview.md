@@ -69,3 +69,4 @@ separate workers later without touching call-sites.
 | AI | provider protocol; Ollama local provider; disabled-by-default, honest status |
 | Storage | `DocumentStore` interface: local-disk (dev) and private S3-compatible (production) backends behind `STORAGE_BACKEND`; objects private, keys server-generated and never client-visible |
 | Identity | provider-agnostic `IdentityProvider` interface: password (local) and OIDC SSO today; providers only verify identity — sessions, RBAC and tenancy stay local |
+| Retention | centralised `retention_service` (config-driven, non-destructive defaults); object-before-row deletion; audit events never deleted; sweeps at startup + admin endpoint (no scheduler) |

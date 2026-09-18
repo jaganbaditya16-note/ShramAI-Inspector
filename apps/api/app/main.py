@@ -35,6 +35,7 @@ from .core.middleware import (
 from .core.security import hash_password, password_policy_error
 from .db.session import Base, SessionLocal, engine
 from .models import Organization, User
+from .services import retention_service
 from .services.demo_seed import seed_demo_workspace
 from .services.pipeline import recover_interrupted_jobs
 
@@ -141,6 +142,7 @@ async def lifespan(app: FastAPI):
             logger.warning("event=startup_recovered_documents count=%d", recovered)
         _bootstrap_admin(db)
         await seed_demo_workspace(db)
+        retention_service.run_retention_sweep(db)
     logger.info(
         "event=api_started version=%s env=%s auth_mode=%s pipeline=%s",
         settings.app_version, settings.app_env, settings.auth_mode, settings.pipeline_mode,

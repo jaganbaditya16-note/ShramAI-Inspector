@@ -158,6 +158,20 @@ async def reprocess_document(document_id: str, db: Session = Depends(get_db),
     )
 
 
+@router.delete("/documents/{document_id}", status_code=204)
+def delete_document(document_id: str, db: Session = Depends(get_db),
+                    principal: Principal = Depends(require_inspector)) -> Response:
+    """Org-scoped hard delete of one document.
+
+    Delegates to the retention service: the storage object is removed first
+    (a backend failure keeps the row so deletion can be retried — no orphaned
+    objects, no dangling rows), then the row with its extracted text,
+    findings, model runs and processing jobs. Audit events are preserved."""
+    document = document_service.get_document_or_404(db, principal, document_id)
+    document_service.delete_document(db, principal, document)
+    return Response(status_code=204)
+
+
 @router.get("/documents/{document_id}/download")
 def download_document(document_id: str, db: Session = Depends(get_db),
                       principal: Principal = Depends(get_principal)) -> Response:

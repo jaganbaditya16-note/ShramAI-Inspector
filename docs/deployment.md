@@ -46,8 +46,10 @@ point `STORAGE_DIR` at a mounted durable volume until object storage is wired.
 7. Centralised secrets (never `.env` files on hosts)
 8. Centralised log aggregation + alerting on `internal_error` / `processing_failed`
 9. Multi-instance rate limiting at the gateway (the in-app limiter is per-instance)
-10. Retention/deletion policy implemented as scheduled jobs (schema supports
-    hard delete incl. stored files); backup-restore tested
+10. Retention configured deliberately (`RETENTION_*` variables; all default
+    to "never" for held data): run `POST /api/v1/admin/retention/run` from
+    cron/CI for periodic sweeps (startup also sweeps). Verify
+    backup-restore and DPDP retention minimums
 11. Security/privacy review (DPDP alignment) and approved integration agreements
 
 ## Authentication modes

@@ -88,6 +88,17 @@ with a **local** Ollama model — document text never leaves the deployment host
 If the model is unavailable, deterministic screening continues unaffected and the
 API reports AI status honestly (`disabled` / `unavailable`).
 
+## Data lifecycle
+
+Retention is configurable and non-destructive by default
+(`RETENTION_DOCUMENT_DAYS`, `RETENTION_REJECTED_DOCUMENT_DAYS`,
+`RETENTION_CASE_DAYS`, `RETENTION_SESSION_DAYS` — `0` = never). Soft-deleted
+cases can be hard-purged after a configured window; deleted documents always
+have their storage objects removed first (no orphans); audit events are never
+deleted. Sweeps run at startup and on demand via
+`POST /api/v1/admin/retention/run` (admin only). See
+[docs/architecture/data-lifecycle.md](docs/architecture/data-lifecycle.md).
+
 ## Authentication
 
 - `AUTH_MODE=demo` — public demo (local/dev only; refused in production).

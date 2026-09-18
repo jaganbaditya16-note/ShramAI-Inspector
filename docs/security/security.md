@@ -119,6 +119,19 @@
   extracted text are rejected and counted on `model_runs`.
 - AI findings are always created as `needs_review`; no code path auto-confirms.
 
+### Retention & deletion
+- All destructive logic is centralised in the retention service (no deletion
+  logic in routers); defaults are non-destructive (`0 = never`).
+- Storage objects are deleted **before** the ledger row; backend failures keep
+  the row (retryable, no orphaned objects); missing objects count as success;
+  sweeps are idempotent and bounded.
+- Tenant isolation: user-initiated deletion is org-scoped (indistinguishable
+  404s cross-tenant); sweeps are admin-only. Documents with active processing
+  jobs are never swept (no resurrection races).
+- Audit events survive every purge (standalone rows) and purge events carry
+  ids/sha256 prefixes only — never document contents.
+- Presigned URLs are opt-in, capped at 1 h, and die with the deleted object.
+
 ### Audit
 - Append-only `audit_events` with actor, action, request ID and id-only details —
   never document text.

@@ -137,6 +137,17 @@ class Settings(BaseSettings):
     ai_input_char_limit: int = Field(default=60_000, ge=1_000)
     retrieval_char_limit: int = Field(default=6_000, ge=100)
 
+    # --- Retention & deletion lifecycle ------------------------------------------
+    # 0 = never expires (safe default; nothing is deleted unless configured).
+    # Case retention applies to soft-deleted cases only: after N days they are
+    # hard-purged (documents, extracted text, findings, reports, storage
+    # objects) — audit events are always preserved.
+    retention_document_days: int = Field(default=0, ge=0, le=3650)
+    retention_rejected_document_days: int = Field(default=7, ge=0, le=3650)
+    retention_case_days: int = Field(default=0, ge=0, le=36500)
+    retention_session_days: int = Field(default=30, ge=1, le=3650)
+    retention_purge_batch: int = Field(default=100, ge=1, le=1000)
+
     # --- Knowledge base --------------------------------------------------------------
     knowledge_dir: str = ""  # empty => repo-relative data/knowledge when present
 

@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from . import audit, auth, cases, dashboard, documents, findings, health, reports
+from . import admin, audit, auth, cases, dashboard, documents, findings, health, reports
 
 api_v1_router = APIRouter(prefix="/api/v1")
 api_v1_router.include_router(health.router)
+api_v1_router.include_router(admin.router)
 api_v1_router.include_router(auth.router)
 api_v1_router.include_router(cases.router)
 api_v1_router.include_router(documents.router)
