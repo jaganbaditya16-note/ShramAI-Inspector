@@ -129,3 +129,7 @@ Before real government or worker data is connected, replace demo authentication 
 ## Submission positioning
 
 ShramAI Inspector is designed around Digital Shram Sankalp Problem Statement #5. The prototype demonstrates the requested document-analysis workflow while deliberately keeping legal determination and enforcement decisions with authorized human reviewers.
+
+## Verification
+
+Every push is checked by GitHub Actions for backend tests and frontend production build. Review the latest workflow result before production deployment.
