@@ -137,14 +137,14 @@ Every push is checked by GitHub Actions for backend tests and frontend productio
 
 ## Single-domain Vercel deployment
 
-The repository now includes a root `vercel.json` configured for Vercel Services:
+The repository includes a root `vercel.json` configured for Vercel Services:
 - `web`: Next.js inspector dashboard
-- `api`: FastAPI backend
+- `api`: containerized FastAPI backend with Tesseract OCR
 - `/api/*`: routed to FastAPI
 - `/*`: routed to Next.js
 
 This keeps the public product on one domain. Vercel Services requires the Vercel project framework to be set to **Services**. Vercel's current documentation describes this model for a Next.js frontend plus FastAPI backend on one deployment URL.
 
-For a production data deployment, configure a managed PostgreSQL database and durable object storage rather than relying on the serverless `/tmp` fallback. The current fallback exists only so the public demo can boot without a database secret; it is not intended for real worker records.
+For the public prototype, the backend tolerates blank environment variables and uses a temporary SQLite database under Vercel's ephemeral filesystem. This is demo-only: persistent PostgreSQL and durable object storage must be configured before handling real worker records. The API container includes Tesseract so image OCR can run in the deployed prototype.
 
 The browser uses the same-origin `/api/v1` path in production, so it does not call `localhost:8000`.
