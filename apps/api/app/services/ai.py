@@ -5,6 +5,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from ..core.config import settings
+from .retrieval import retrieve
 
 class AIFinding(BaseModel):
     rule_id: str = Field(min_length=1, max_length=80)
@@ -38,7 +39,7 @@ async def analyze(text: str) -> AIResult:
         "format": "json",
         "options": {"temperature": 0},
         "system": SYSTEM_PROMPT,
-        "prompt": "Analyze only this document data:\n\n" + text[:120000],
+        "prompt": "Approved reference context:\n" + "\n\n".join(retrieve(text)) + "\n\nAnalyze only this document data:\n\n" + text[:120000],
     }
     try:
         async with httpx.AsyncClient(timeout=45) as client:
