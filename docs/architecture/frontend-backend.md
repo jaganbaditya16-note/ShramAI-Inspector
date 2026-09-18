@@ -9,7 +9,7 @@ Frontend:
 Backend:
 - URL: http://localhost:8000
 - Health: GET /api/v1/health
-- OpenAPI: http://localhost:8000/docs
+- OpenAPI: http://localhost:8000/api/docs
 
 ## Request flow
 
