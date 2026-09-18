@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from .core.config import settings
 from .db import Base, engine, get_db
-from .models import Case, Document, Finding
+from .models import AuditEvent, Case, Document, Finding
 from .schemas import CaseCreate, CaseList, CaseOut, FindingOut, FindingUpdate, HealthResponse
 from .security import require_demo_token
 from .services.ai import analyze
@@ -20,11 +20,11 @@ from .services.rules import RULE_VERSION, run_rules
 
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="ShramAI Inspector API", version="0.1.0")
+app = FastAPI(title="ShramAI Inspector API", version="0.2.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[x.strip() for x in settings.allowed_origins.split(",") if x.strip()],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type"],
 )
@@ -68,6 +68,60 @@ def case_out(case: Case) -> CaseOut:
         findings=len(case.findings),
     )
 
+def get_or_create_demo_case(db: Session, case_id: str) -> Case | None:
+    case = db.get(Case, case_id)
+    if case:
+        return case
+    if case_id != "DEMO-001":
+        return None
+    demo = Case(
+        id="DEMO-001",
+        name="Demo Factory Inspection",
+        status="draft",
+        establishment_reference="SYNTHETIC",
+    )
+    db.add(demo)
+    db.commit()
+    db.refresh(demo)
+    record(db, "demo_case_initialized", demo.id, {"synthetic": True})
+    return demo
+
+def add_findings(db: Session, document: Document, text: str):
+    db.execute(delete(Finding).where(Finding.document_id == document.id))
+    results = run_rules(text)
+    for item in results:
+        db.add(Finding(
+            id=f"FND-{uuid4().hex[:12].upper()}",
+            case_id=document.case_id,
+            document_id=document.id,
+            rule_id=f"{item.rule_id}@{RULE_VERSION}",
+            title=item.title,
+            severity=item.severity,
+            status="needs_review",
+            explanation=item.explanation,
+            evidence=f"{document.filename}: {item.evidence}",
+            confidence=item.confidence,
+        ))
+
+    return results
+
+async def add_ai_findings(db: Session, document: Document, text: str):
+    ai_result = await analyze(text)
+    for item in ai_result.findings:
+        db.add(Finding(
+            id=f"FND-{uuid4().hex[:12].upper()}",
+            case_id=document.case_id,
+            document_id=document.id,
+            rule_id=item.rule_id,
+            title=item.title,
+            severity=item.severity,
+            status="needs_review",
+            explanation=item.explanation,
+            evidence=f"{document.filename}: {item.evidence}",
+            confidence=item.confidence,
+        ))
+    return ai_result
+
 @app.get("/", response_model=HealthResponse)
 def root_health() -> HealthResponse:
     return HealthResponse(status="ok", version=app.version)
@@ -80,17 +134,17 @@ def health() -> HealthResponse:
 def list_cases(db: Session = Depends(get_db)) -> CaseList:
     cases = db.scalars(select(Case).order_by(Case.created_at.desc())).all()
     if not cases:
-        demo = Case(id="DEMO-001", name="Demo Factory Inspection", status="draft", establishment_reference="SYNTHETIC")
-        db.add(demo)
-        db.commit()
-        db.refresh(demo)
-        record(db, "demo_case_initialized", demo.id, {"synthetic": True})
-        cases = [demo]
+        demo = get_or_create_demo_case(db, "DEMO-001")
+        cases = [demo] if demo else []
     return CaseList(items=[case_out(c) for c in cases])
 
 @app.post("/api/v1/cases", response_model=CaseOut, status_code=201, dependencies=[Depends(require_demo_token)])
 def create_case(payload: CaseCreate, db: Session = Depends(get_db)) -> CaseOut:
-    case = Case(id=f"CASE-{uuid4().hex[:12].upper()}", name=payload.name.strip(), establishment_reference=payload.establishment_reference)
+    case = Case(
+        id=f"CASE-{uuid4().hex[:12].upper()}",
+        name=payload.name.strip(),
+        establishment_reference=payload.establishment_reference,
+    )
     db.add(case)
     db.commit()
     db.refresh(case)
@@ -99,16 +153,19 @@ def create_case(payload: CaseCreate, db: Session = Depends(get_db)) -> CaseOut:
 
 @app.get("/api/v1/cases/{case_id}", response_model=CaseOut, dependencies=[Depends(require_demo_token)])
 def get_case(case_id: str, db: Session = Depends(get_db)) -> CaseOut:
-    case = db.get(Case, case_id)
+    case = get_or_create_demo_case(db, case_id)
     if not case:
         raise HTTPException(404, "Case not found")
     return case_out(case)
 
 @app.post("/api/v1/cases/{case_id}/documents", dependencies=[Depends(require_demo_token)])
 async def upload_document(case_id: str, file: UploadFile = File(...), db: Session = Depends(get_db)):
-    case = db.get(Case, case_id)
+    # The synthetic demo case is recreated automatically if a stateless preview
+    # instance receives a request before it has seen the earlier /cases request.
+    case = get_or_create_demo_case(db, case_id)
     if not case:
         raise HTTPException(404, "Case not found")
+
     path, size = await save_upload(file)
     document = Document(
         id=f"DOC-{uuid4().hex[:12].upper()}",
@@ -121,40 +178,18 @@ async def upload_document(case_id: str, file: UploadFile = File(...), db: Sessio
     db.add(document)
     db.commit()
     db.refresh(document)
-    record(db, "document_uploaded", case_id, {"document_id": document.id, "filename": document.filename, "size": size})
+    record(db, "document_uploaded", case_id, {
+        "document_id": document.id,
+        "filename": document.filename,
+        "size": size,
+    })
 
-    db.execute(delete(Finding).where(Finding.document_id == document.id))
     text = extract_text(document.path)
     document.extracted_text = text
     document.status = "processed" if text.strip() else "needs_ocr_or_manual_review"
-    results = run_rules(text)
-    for item in results:
-        db.add(Finding(
-            id=f"FND-{uuid4().hex[:12].upper()}",
-            case_id=document.case_id,
-            document_id=document.id,
-            rule_id=f"{item.rule_id}@{RULE_VERSION}",
-            title=item.title,
-            severity=item.severity,
-            status="needs_review",
-            explanation=item.explanation,
-            evidence=f"{document.filename}: {item.evidence}",
-            confidence=item.confidence,
-        ))
-    ai_result = await analyze(text)
-    for item in ai_result.findings:
-        db.add(Finding(
-            id=f"FND-{uuid4().hex[:12].upper()}",
-            case_id=document.case_id,
-            document_id=document.id,
-            rule_id=item.rule_id,
-            title=item.title,
-            severity=item.severity,
-            status="needs_review",
-            explanation=item.explanation,
-            evidence=f"{document.filename}: {item.evidence}",
-            confidence=item.confidence,
-        ))
+    results = add_findings(db, document, text)
+    ai_result = await add_ai_findings(db, document, text)
+
     case.status = "needs_review"
     db.commit()
     record(db, "document_processed", case_id, {
@@ -164,14 +199,19 @@ async def upload_document(case_id: str, file: UploadFile = File(...), db: Sessio
         "ai_status": ai_result.status,
         "ai_findings": len(ai_result.findings),
     })
+
+    findings = db.scalars(
+        select(Finding).where(Finding.document_id == document.id).order_by(Finding.created_at.asc())
+    ).all()
     return {
         "id": document.id,
         "filename": document.filename,
         "status": document.status,
         "processed": True,
         "characters_extracted": len(text),
-        "findings_count": len(results) + len(ai_result.findings),
+        "findings_count": len(findings),
         "ai_status": ai_result.status,
+        "created_at": document.created_at.isoformat(),
         "findings": [
             {
                 "id": f.id,
@@ -183,7 +223,7 @@ async def upload_document(case_id: str, file: UploadFile = File(...), db: Sessio
                 "evidence": f.evidence,
                 "confidence": f.confidence,
             }
-            for f in db.scalars(select(Finding).where(Finding.document_id == document.id)).all()
+            for f in findings
         ],
     }
 
@@ -192,72 +232,79 @@ async def process_document(document_id: str, db: Session = Depends(get_db)):
     document = db.get(Document, document_id)
     if not document:
         raise HTTPException(404, "Document not found")
-    db.execute(delete(Finding).where(Finding.document_id == document.id))
+
     text = extract_text(document.path)
     document.extracted_text = text
     document.status = "processed" if text.strip() else "needs_ocr_or_manual_review"
-    results = run_rules(text)
-    for item in results:
-        db.add(Finding(
-            id=f"FND-{uuid4().hex[:12].upper()}",
-            case_id=document.case_id,
-            document_id=document.id,
-            rule_id=f"{item.rule_id}@{RULE_VERSION}",
-            title=item.title,
-            severity=item.severity,
-            status="needs_review",
-            explanation=item.explanation,
-            evidence=f"{document.filename}: {item.evidence}",
-            confidence=item.confidence,
-        ))
-    ai_result = await analyze(text)
-    for item in ai_result.findings:
-        db.add(Finding(
-            id=f"FND-{uuid4().hex[:12].upper()}",
-            case_id=document.case_id,
-            document_id=document.id,
-            rule_id=item.rule_id,
-            title=item.title,
-            severity=item.severity,
-            status="needs_review",
-            explanation=item.explanation,
-            evidence=f"{document.filename}: {item.evidence}",
-            confidence=item.confidence,
-        ))
+    results = add_findings(db, document, text)
+    ai_result = await add_ai_findings(db, document, text)
 
     case = db.get(Case, document.case_id)
     if case:
         case.status = "needs_review"
     db.commit()
-    record(db, "document_processed", document.case_id, {"document_id": document.id, "text_extracted": bool(text.strip()), "rule_version": RULE_VERSION, "ai_status": ai_result.status, "ai_findings": len(ai_result.findings)})
-    return {"document_id": document.id, "status": document.status, "characters_extracted": len(text), "rule_findings": len(results), "ai_findings": len(ai_result.findings), "ai_status": ai_result.status}
+    record(db, "document_processed", document.case_id, {
+        "document_id": document.id,
+        "text_extracted": bool(text.strip()),
+        "rule_version": RULE_VERSION,
+        "ai_status": ai_result.status,
+        "ai_findings": len(ai_result.findings),
+    })
+    return {
+        "document_id": document.id,
+        "status": document.status,
+        "characters_extracted": len(text),
+        "rule_findings": len(results),
+        "ai_findings": len(ai_result.findings),
+        "ai_status": ai_result.status,
+    }
 
 @app.get("/api/v1/cases/{case_id}/documents", dependencies=[Depends(require_demo_token)])
 def list_documents(case_id: str, db: Session = Depends(get_db)):
-    if not db.get(Case, case_id):
+    case = get_or_create_demo_case(db, case_id)
+    if not case:
         raise HTTPException(404, "Case not found")
-    documents = db.scalars(select(Document).where(Document.case_id == case_id).order_by(Document.created_at.desc())).all()
+    documents = db.scalars(
+        select(Document).where(Document.case_id == case_id).order_by(Document.created_at.desc())
+    ).all()
     return [
-        {"id": d.id, "filename": d.filename, "content_type": d.content_type, "size_bytes": d.size_bytes, "status": d.status, "created_at": d.created_at.isoformat()}
+        {
+            "id": d.id,
+            "filename": d.filename,
+            "content_type": d.content_type,
+            "size_bytes": d.size_bytes,
+            "status": d.status,
+            "created_at": d.created_at.isoformat(),
+        }
         for d in documents
     ]
 
 @app.get("/api/v1/cases/{case_id}/audit", dependencies=[Depends(require_demo_token)])
 def list_audit_events(case_id: str, db: Session = Depends(get_db)):
-    if not db.get(Case, case_id):
+    case = get_or_create_demo_case(db, case_id)
+    if not case:
         raise HTTPException(404, "Case not found")
-    from .models import AuditEvent
-    events = db.scalars(select(AuditEvent).where(AuditEvent.case_id == case_id).order_by(AuditEvent.created_at.desc())).all()
+    events = db.scalars(
+        select(AuditEvent).where(AuditEvent.case_id == case_id).order_by(AuditEvent.created_at.desc())
+    ).all()
     return [
-        {"id": e.id, "action": e.action, "detail": e.detail, "created_at": e.created_at.isoformat()}
+        {
+            "id": e.id,
+            "action": e.action,
+            "detail": e.detail,
+            "created_at": e.created_at.isoformat(),
+        }
         for e in events
     ]
 
 @app.get("/api/v1/cases/{case_id}/findings", response_model=list[FindingOut], dependencies=[Depends(require_demo_token)])
 def list_findings(case_id: str, db: Session = Depends(get_db)):
-    if not db.get(Case, case_id):
+    case = get_or_create_demo_case(db, case_id)
+    if not case:
         raise HTTPException(404, "Case not found")
-    return db.scalars(select(Finding).where(Finding.case_id == case_id).order_by(Finding.created_at.desc())).all()
+    return db.scalars(
+        select(Finding).where(Finding.case_id == case_id).order_by(Finding.created_at.desc())
+    ).all()
 
 @app.patch("/api/v1/findings/{finding_id}", response_model=FindingOut, dependencies=[Depends(require_demo_token)])
 def update_finding(finding_id: str, payload: FindingUpdate, db: Session = Depends(get_db)):
@@ -266,12 +313,34 @@ def update_finding(finding_id: str, payload: FindingUpdate, db: Session = Depend
         raise HTTPException(404, "Finding not found")
     finding.status = payload.status
     db.commit()
-    record(db, "finding_reviewed", finding.case_id, {"finding_id": finding.id, "status": finding.status})
+    record(db, "finding_reviewed", finding.case_id, {
+        "finding_id": finding.id,
+        "status": finding.status,
+    })
     return finding
+
+@app.get("/api/v1/dashboard/summary", dependencies=[Depends(require_demo_token)])
+def dashboard_summary(db: Session = Depends(get_db)):
+    cases = db.scalars(select(Case)).all()
+    findings = db.scalars(select(Finding)).all()
+    accepted = sum(1 for f in findings if f.status == "accepted")
+    rejected = sum(1 for f in findings if f.status == "rejected")
+    needs_review = sum(1 for f in findings if f.status == "needs_review")
+    score, risk = screening_score(findings)
+    return {
+        "cases": len(cases),
+        "documents": db.scalar(select(Document).count()) if False else len(db.scalars(select(Document)).all()),
+        "findings": len(findings),
+        "accepted": accepted,
+        "rejected": rejected,
+        "needs_review": needs_review,
+        "screening_score": score,
+        "risk_level": risk,
+    }
 
 @app.post("/api/v1/cases/{case_id}/report", dependencies=[Depends(require_demo_token)])
 def generate_report(case_id: str, db: Session = Depends(get_db)):
-    case = db.get(Case, case_id)
+    case = get_or_create_demo_case(db, case_id)
     if not case:
         raise HTTPException(404, "Case not found")
     findings = db.scalars(select(Finding).where(Finding.case_id == case_id)).all()
@@ -287,7 +356,16 @@ def generate_report(case_id: str, db: Session = Depends(get_db)):
         "risk_level": risk,
         "disclaimer": "Screening score is a transparent prioritization aid based only on configured findings and review status. It is not a legal compliance score or enforcement decision.",
         "findings": [
-            {"id": f.id, "rule_id": f.rule_id, "title": f.title, "severity": f.severity, "status": f.status, "confidence": f.confidence, "evidence": f.evidence, "explanation": f.explanation}
+            {
+                "id": f.id,
+                "rule_id": f.rule_id,
+                "title": f.title,
+                "severity": f.severity,
+                "status": f.status,
+                "confidence": f.confidence,
+                "evidence": f.evidence,
+                "explanation": f.explanation,
+            }
             for f in findings
         ],
     }
