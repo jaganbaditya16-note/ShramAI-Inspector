@@ -8,8 +8,7 @@
     "api": {
       "root": "apps/api/",
       "entrypoint": "app.main:app",
-      "framework": "fastapi",
-      "includeFiles": ["data/**"]
+      "framework": "fastapi"
     }
   },
   "rewrites": [
