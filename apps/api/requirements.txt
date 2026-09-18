@@ -13,4 +13,5 @@ pypdfium2==5.13.0
 Pillow==11.3.0
 pytesseract==0.3.13
 httpx==0.28.1
+boto3==1.43.97
 email-validator==2.2.0

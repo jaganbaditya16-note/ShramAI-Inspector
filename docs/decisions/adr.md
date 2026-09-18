@@ -66,3 +66,31 @@ The repo must never ship unverified legal text. `data/knowledge/` accepts only
 approved, versioned, provenance-carrying markdown (template + README included);
 the demo corpus is clearly-labelled synthetic material so retrieval and AI flows
 are demonstrable without fabricating authority.
+
+## ADR-008 — Pluggable document storage: local disk (dev) + private S3-compatible object store (production)
+
+**Status**: accepted (2026-09)
+
+The application depends on a narrow `DocumentStore` interface (save / get /
+exists / delete / stat / open_path / optional presign), not on local disk.
+`STORAGE_BACKEND` selects the implementation: `local` (development/tests,
+unchanged behaviour) or `s3` (any S3-compatible private bucket via boto3).
+Decisions embedded in this choice:
+
+- **Private by default, no public URLs.** Downloads stream through the
+  authorised API endpoint; a presigned-GET redirect exists only when explicitly
+  enabled and is short-lived (default 300 s, capped at 1 h).
+- **Server-generated keys only**, validated against a strict shape in every
+  backend method — path traversal is impossible by construction.
+- **Fail-safe semantics**: upload-write failures → `503 storage_unavailable`
+  with nothing persisted; registration failures remove the just-written object;
+  delete failures keep the document row; missing objects → safe 404.
+- **Startup enforcement**: `s3` without bucket/credentials refuses to boot;
+  `local` refuses to boot in production (demo-grade durability is a config
+  error, not a silent default).
+- boto3 is the one new production dependency (necessary for S3; lazily used so
+  local development never touches it). No AWS SDK defaults are trusted for
+  security posture: no public ACLs, SSE optional but configurable.
+
+Consequences: storage provider changes are config-only; retention/lifecycle
+rules remain a deployment concern (deferred).

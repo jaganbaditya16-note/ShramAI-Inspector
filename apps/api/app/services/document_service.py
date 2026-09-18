@@ -12,6 +12,9 @@ Security scanning order (fail-closed):
 
 from __future__ import annotations
 
+import contextlib
+import logging
+
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -22,13 +25,16 @@ from ..core.errors import (
     ScanStreamLimit,
     ScanTimeout,
     ScanUnavailable,
+    StorageUnavailable,
 )
 from ..core.security import Principal
 from ..models import Case, Document, ProcessingJob
 from . import audit_service
 from .malware import ScanVerdict, scan_upload
-from .storage import get_store
+from .storage import StorageError, get_store
 from .validation import ValidatedUpload, validate_upload
+
+logger = logging.getLogger("shramai.documents")
 
 _BLOCKED_AUDIT_MAX_NOTE = 160
 
@@ -126,56 +132,72 @@ async def persist_upload(
         raise _blocked_error(scan_result.verdict)
 
     # Passing scan (clean or explicitly skipped): store and register as before.
-    key = get_store().save(validated.data, validated.suffix)
-    document = Document(
-        org_id=principal.org_id,
-        case_id=case.id,
-        original_filename=validated.filename,
-        storage_key=key,
-        content_type=validated.content_type,
-        size_bytes=validated.size_bytes,
-        sha256=validated.sha256,
-        status="queued",
-        scan_status=scan_result.verdict.value,
-        scan_engine=scan_result.engine,
-        scan_note=(scan_result.note or "")[:200] or None,
-        created_by=principal.user_id,
-    )
-    db.add(document)
-    db.flush()
-    job = ProcessingJob(org_id=principal.org_id, document_id=document.id, status="queued")
-    db.add(job)
-    audit_service.record(
-        db,
-        action="document_uploaded",
-        org_id=principal.org_id,
-        case_id=case.id,
-        actor=principal,
-        detail={
-            "document_id": document.id,
-            "filename": validated.filename,
-            "size_bytes": validated.size_bytes,
-            "content_type": validated.content_type,
-            "sha256": validated.sha256[:16],
-        },
-        commit=False,
-    )
-    audit_service.record(
-        db,
-        action=(
-            "document_scan_clean" if scan_result.verdict == ScanVerdict.CLEAN
-            else "document_scan_skipped"
-        ),
-        org_id=principal.org_id,
-        case_id=case.id,
-        actor=principal,
-        detail={**scan_detail, "document_id": document.id},
-        commit=False,
-    )
-    db.commit()
-    db.refresh(document)
-    db.refresh(job)
-    return document, job
+    try:
+        key = get_store().save(validated.data, validated.suffix)
+    except StorageError as exc:
+        logger.error(
+            "event=document_storage_write_failed case=%s size=%d sha256=%s",
+            case.id, validated.size_bytes, validated.sha256[:16],
+        )
+        raise StorageUnavailable(
+            "The document could not be stored; the upload was not accepted."
+        ) from exc
+    try:
+        document = Document(
+            org_id=principal.org_id,
+            case_id=case.id,
+            original_filename=validated.filename,
+            storage_key=key,
+            content_type=validated.content_type,
+            size_bytes=validated.size_bytes,
+            sha256=validated.sha256,
+            status="queued",
+            scan_status=scan_result.verdict.value,
+            scan_engine=scan_result.engine,
+            scan_note=(scan_result.note or "")[:200] or None,
+            created_by=principal.user_id,
+        )
+        db.add(document)
+        db.flush()
+        job = ProcessingJob(org_id=principal.org_id, document_id=document.id, status="queued")
+        db.add(job)
+        audit_service.record(
+            db,
+            action="document_uploaded",
+            org_id=principal.org_id,
+            case_id=case.id,
+            actor=principal,
+            detail={
+                "document_id": document.id,
+                "filename": validated.filename,
+                "size_bytes": validated.size_bytes,
+                "content_type": validated.content_type,
+                "sha256": validated.sha256[:16],
+            },
+            commit=False,
+        )
+        audit_service.record(
+            db,
+            action=(
+                "document_scan_clean" if scan_result.verdict == ScanVerdict.CLEAN
+                else "document_scan_skipped"
+            ),
+            org_id=principal.org_id,
+            case_id=case.id,
+            actor=principal,
+            detail={**scan_detail, "document_id": document.id},
+            commit=False,
+        )
+        db.commit()
+        db.refresh(document)
+        db.refresh(job)
+        return document, job
+    except Exception:
+        # The object must not outlive a failed registration (upload
+        # interruption / commit failure): best-effort removal, then re-raise.
+        with contextlib.suppress(Exception):
+            get_store().delete(key)
+        raise
 
 
 def get_document_or_404(db: Session, principal: Principal, document_id: str) -> Document:
@@ -195,7 +217,17 @@ def latest_job(db: Session, document_id: str) -> ProcessingJob | None:
 
 
 def delete_document(db: Session, principal: Principal, document: Document) -> None:
-    get_store().delete(document.storage_key)
+    """Hard-delete a document: object first, then the row.
+
+    If the storage backend fails, the row is kept (no dangling record pointing
+    at an unremoved object); a missing object is treated as already deleted.
+    """
+    try:
+        get_store().delete(document.storage_key)
+    except StorageError as exc:
+        raise StorageUnavailable(
+            "The stored file could not be deleted; the document was kept."
+        ) from exc
     db.delete(document)
     audit_service.record(
         db, action="document_deleted", org_id=principal.org_id, case_id=document.case_id,

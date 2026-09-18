@@ -107,6 +107,13 @@ class ScanStreamLimit(AppError):
     code = "scan_stream_limit"
 
 
+class StorageUnavailable(AppError):
+    """The document storage backend failed; the operation was not completed."""
+
+    status_code = 503
+    code = "storage_unavailable"
+
+
 def error_envelope(code: str, message: str, request_id: str,
                    details: dict[str, Any] | None = None) -> dict[str, Any]:
     body: dict[str, Any] = {

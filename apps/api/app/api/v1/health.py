@@ -30,4 +30,11 @@ def health(db: Session = Depends(get_db)) -> dict:
             "engine": get_scanner().name if get_scanner() else None,
             "configured": get_scanner() is not None,
         },
+        "storage": {
+            "backend": settings.storage_backend,
+            "bucket": settings.s3_bucket or None,
+            "presigned_downloads": (
+                settings.s3_presigned_downloads if settings.storage_backend == "s3" else False
+            ),
+        },
     }

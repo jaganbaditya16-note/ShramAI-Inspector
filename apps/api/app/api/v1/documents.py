@@ -3,19 +3,22 @@ authorised download and reprocessing."""
 
 from __future__ import annotations
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, File, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from ...core.config import settings
-from ...core.errors import Conflict, NotFound
+from ...core.errors import Conflict, NotFound, StorageUnavailable
 from ...core.security import Principal
 from ...db.session import get_db
 from ...models import Document, ProcessingJob
 from ...schemas import DocumentList, DocumentOut, JobOut, UploadAccepted
 from ...services import audit_service, case_service, document_service, pipeline
 from ...services.pipeline import scheduler
+from ...services.storage import MissingObjectError, StorageError
 from ...services.validation import read_bounded_upload
 from ..deps import PageParams, get_principal, rate_limit_upload, require_inspector
 
@@ -157,13 +160,42 @@ async def reprocess_document(document_id: str, db: Session = Depends(get_db),
 
 @router.get("/documents/{document_id}/download")
 def download_document(document_id: str, db: Session = Depends(get_db),
-                      principal: Principal = Depends(get_principal)) -> FileResponse:
+                      principal: Principal = Depends(get_principal)) -> Response:
     """Authorised streaming of the stored original. Storage keys are server
-    generated and access is re-checked on every request (no unsigned URLs)."""
+    generated and access is re-checked on every request (no unsigned URLs).
+
+    Objects stay private on every backend: the default path streams bytes
+    through this authorised endpoint; presigned URLs are used only when the
+    operator explicitly enables them, and they are short-lived."""
     document = document_service.get_document_or_404(db, principal, document_id)
     if not document.storage_key or document.status == "rejected":
         raise NotFound("No stored file exists for this document (security-scan rejected).")
-    path = document_service.get_store().open_path(document.storage_key)
+    store = document_service.get_store()
+    key = document.storage_key
+
+    if settings.s3_presigned_downloads:
+        url = store.presign_get(key, settings.s3_presign_ttl_seconds)
+        if url is not None:
+            return RedirectResponse(url, status_code=307, headers={"Cache-Control": "no-store"})
+
+    headers = {
+        "Cache-Control": "no-store",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": _content_disposition(document.original_filename),
+    }
+    if store.ephemeral_paths:
+        # Backend without a filesystem (S3): stream through the authorised API.
+        try:
+            data = store.get_bytes(key)
+        except MissingObjectError as exc:
+            raise NotFound("Stored file is missing; the document may need re-upload.") from exc
+        except StorageError as exc:
+            raise StorageUnavailable(
+                "The stored file is temporarily unavailable; try again."
+            ) from exc
+        return Response(content=data, media_type=document.content_type, headers=headers)
+
+    path = store.open_path(key)
     if not path.is_file():
         raise NotFound("Stored file is missing; the document may need re-upload.")
     return FileResponse(
@@ -171,4 +203,13 @@ def download_document(document_id: str, db: Session = Depends(get_db),
         media_type=document.content_type,
         filename=document.original_filename,
         headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+    )
+
+
+def _content_disposition(filename: str) -> str:
+    """RFC 5987 attachment header; never contains storage keys."""
+    fallback = filename.replace('"', "_").replace("\\", "_").encode("ascii", "ignore").decode()
+    return (
+        f"attachment; filename=\"{fallback or 'document'}\"; "
+        f"filename*=UTF-8''{quote(filename)}"
     )

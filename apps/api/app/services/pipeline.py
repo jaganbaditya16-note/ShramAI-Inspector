@@ -32,7 +32,7 @@ from .classification import classify
 from .extraction import ExtractionResult, extract_document
 from .rules import RULE_VERSION, RuleContext, evidence_hash, run_rules
 from .rules.base import RuleViolation
-from .storage import get_store
+from .storage import StorageError, get_store
 
 logger = get_logger(__name__)
 
@@ -152,9 +152,33 @@ async def run_pipeline(db: Session, document_id: str, job_id: str) -> PipelineOu
     try:
         # 1. Extraction (thread: CPU-bound parsing/OCR).
         started = time.perf_counter()
-        path = get_store().open_path(document.storage_key)
+        store = get_store()
         try:
-            extraction = await asyncio.to_thread(extract_document, path)
+            path = store.open_path(document.storage_key)
+        except StorageError:
+            # Storage backend could not serve the object: fail the job with a
+            # safe message instead of crashing the pipeline run.
+            document.status = "failed"
+            document.error = "The stored file could not be retrieved from storage."
+            job.status = "failed"
+            job.error = "storage_unavailable"
+            job.finished_at = utcnow()
+            db.commit()
+            audit_service.record(
+                db,
+                action="document_processing_failed",
+                org_id=document.org_id,
+                case_id=document.case_id,
+                detail={"document_id": document.id, "reason": "storage_unavailable"},
+            )
+            logger.error("event=pipeline_storage_unavailable document=%s", document.id)
+            return PipelineOutcome(document_status="failed")
+        try:
+            try:
+                extraction = await asyncio.to_thread(extract_document, path)
+            finally:
+                if store.ephemeral_paths:
+                    store.discard_path(path)  # temp download cleanup (S3)
         except ExtractionFailure as exc:
             document.status = "failed"
             document.error = exc.message

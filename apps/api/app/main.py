@@ -53,6 +53,25 @@ def validate_security_config() -> None:
         )
     if settings.malware_scan_mode == "enforcing" and not settings.clamd_host.strip():
         raise RuntimeError("MALWARE_SCAN_MODE=enforcing requires CLAMD_HOST to be configured.")
+    if settings.storage_backend == "s3":
+        missing = [
+            name
+            for name, value in (
+                ("S3_BUCKET", settings.s3_bucket),
+                ("S3_ACCESS_KEY_ID", settings.s3_access_key_id),
+                ("S3_SECRET_ACCESS_KEY", settings.s3_secret_access_key),
+            )
+            if not value.strip()
+        ]
+        if missing:
+            raise RuntimeError(
+                f"STORAGE_BACKEND=s3 requires these environment variables: {', '.join(missing)}."
+            )
+    if settings.is_production and settings.storage_backend == "local":
+        raise RuntimeError(
+            "STORAGE_BACKEND=local is not production-grade (no durability). "
+            "Configure an S3-compatible object store and set STORAGE_BACKEND=s3."
+        )
 
 
 @asynccontextmanager

@@ -16,7 +16,7 @@ FastAPI (layered monolith)
    └─ db/          engine/session, Alembic migrations
         │
         ├─ PostgreSQL (production) / SQLite (local demo)
-        └─ Document storage (local disk now; object-storage backend via protocol)
+        └─ Document storage (pluggable: local disk for dev / private S3-compatible object store)
 ```
 
 The deployment unit is deliberately a **layered monolith**: one API service and one
@@ -67,4 +67,4 @@ separate workers later without touching call-sites.
 | Time | timezone-aware UTC datetimes everywhere (TypeDecorator normalises SQLite) |
 | Rules | pure, versioned registry (`RULE_VERSION`), reproducible per text+version |
 | AI | provider protocol; Ollama local provider; disabled-by-default, honest status |
-| Storage | `DocumentStore` protocol; local-disk implementation; keys never client-visible |
+| Storage | `DocumentStore` interface: local-disk (dev) and private S3-compatible (production) backends behind `STORAGE_BACKEND`; objects private, keys server-generated and never client-visible |

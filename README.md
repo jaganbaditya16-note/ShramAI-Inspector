@@ -88,6 +88,22 @@ with a **local** Ollama model — document text never leaves the deployment host
 If the model is unavailable, deterministic screening continues unaffected and the
 API reports AI status honestly (`disabled` / `unavailable`).
 
+## Document storage
+
+Uploads live behind a pluggable `DocumentStore` interface:
+
+- `STORAGE_BACKEND=local` (default): local disk for development and tests only
+  (production startup refuses it).
+- `STORAGE_BACKEND=s3`: any private S3-compatible bucket (AWS S3, MinIO,
+  Cloudflare R2). Objects are **private by default**, keys are
+  server-generated, downloads stream through the authorised API (short-lived
+  presigned redirects only if you enable `S3_PRESIGNED_DOWNLOADS`), and
+  credentials are read from the environment — never hard-coded, never exposed
+  to the frontend.
+
+See [.env.example](.env.example) for the `S3_*` variables and
+[docs/deployment.md](docs/deployment.md) for production setup.
+
 ## Malware scanning
 
 Uploads can pass through an optional malware-scan stage before any bytes are

@@ -46,9 +46,22 @@ class Settings(BaseSettings):
     db_auto_create: bool | None = None  # None => auto (True for sqlite only)
 
     # --- Storage --------------------------------------------------------------
-    # Local disk storage is for development/demo only. Production deployments
-    # must mount durable private object storage (see docs/deployment.md).
+    # local: development/demo only (demo-grade durability). s3: private
+    # S3-compatible object storage (AWS S3, MinIO, R2, ...) for production.
+    # Credentials are read from the environment only — never hard-coded.
     storage_dir: str = "./storage"
+    storage_backend: Literal["local", "s3"] = "local"
+    s3_endpoint_url: str = ""  # empty = AWS; set for MinIO/R2/Spaces endpoints
+    s3_region: str = ""  # empty = botocore default resolution
+    s3_bucket: str = ""
+    s3_access_key_id: str = ""
+    s3_secret_access_key: str = ""  # env only; never logged, never serialised
+    s3_session_token: str = ""
+    s3_server_side_encryption: str = ""  # e.g. AES256 or aws:kms
+    # Downloads stream through the authorised API by default (no URLs at all).
+    # When true, the download endpoint redirects to a short-lived presigned GET.
+    s3_presigned_downloads: bool = False
+    s3_presign_ttl_seconds: int = Field(default=300, ge=30, le=3600)
 
     # --- Upload and extraction limits ------------------------------------------
     max_upload_mb: int = Field(default=25, ge=1, le=200)

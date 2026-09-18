@@ -17,6 +17,7 @@ and review decisions · audit history · credentials/sessions · rule/model prov
 | Repudiation | "I never confirmed that" | append-only audit events with actor + request id ✔ |
 | Information disclosure | IDOR / cross-tenant reads | org-scoped queries everywhere; indistinguishable 404s ✔ (tested) |
 | Information disclosure | predictable document URLs | server-generated keys; authorised download endpoint re-checks access ✔ |
+| Information disclosure | stored files reached directly / cross-tenant | objects private by default, no public URLs, keys never exposed; downloads re-check org-scoped access; presigned URLs (opt-in) are short-lived ✔ (tested) |
 | Information disclosure | log leakage | structured logs carry ids/status only; document text never logged ✔ |
 | Information disclosure | prompt/content exfiltration via AI | local-only provider by default; bounded input; no third-party calls ✔ |
 | DoS | huge uploads / deep PDFs / OCR storms | size caps, page caps, OCR page+DPI bounds, worker semaphore, body limit ✔ |
@@ -31,8 +32,10 @@ and review decisions · audit history · credentials/sessions · rule/model prov
 ## Residual risks (documented, accepted for current stage)
 
 - In-process rate limiting is per-instance; use a gateway/Redis when scaling out.
-- Local-disk document storage is demo-grade; production must attach durable
-  encrypted object storage via the `DocumentStore` protocol.
+- Document storage defaults to local disk for development; production must set
+  `STORAGE_BACKEND=s3` (startup enforces this) and enable provider-side
+  encryption at rest plus bucket public-access blocking. The bucket itself and
+  its IAM credentials are deployment concerns.
 - Malware scanning defaults to `off` for local/demo development and must be
   enabled (`MALWARE_SCAN_MODE=enforcing` + a reachable clamd host) in
   production; the daemon itself is a deployment concern. Signatures update on

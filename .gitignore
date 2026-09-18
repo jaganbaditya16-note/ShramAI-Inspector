@@ -16,6 +16,8 @@ coverage/
 *.sqlite
 *.db-wal
 *.db-shm
-storage/
+# Runtime document-storage dirs only (never the app/services/storage/ package).
+/storage/
+/apps/api/storage/
 bootstrap_admin_credentials.txt
 .vercel
