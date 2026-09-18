@@ -12,6 +12,7 @@ from .db import Base, engine, get_db
 from .models import Case, Document, Finding
 from .schemas import CaseCreate, CaseList, CaseOut, FindingOut, FindingUpdate, HealthResponse
 from .security import require_demo_token
+from .services.ai import analyze
 from .services.audit import record
 from .services.documents import save_upload
 from .services.extraction import extract_text
@@ -108,7 +109,7 @@ async def upload_document(case_id: str, file: UploadFile = File(...), db: Sessio
     return {"id": document.id, "filename": document.filename, "status": document.status}
 
 @app.post("/api/v1/documents/{document_id}/process", dependencies=[Depends(require_demo_token)])
-def process_document(document_id: str, db: Session = Depends(get_db)):
+async def process_document(document_id: str, db: Session = Depends(get_db)):
     document = db.get(Document, document_id)
     if not document:
         raise HTTPException(404, "Document not found")
@@ -130,12 +131,27 @@ def process_document(document_id: str, db: Session = Depends(get_db)):
             evidence=f"{document.filename}: {item.evidence}",
             confidence=item.confidence,
         ))
+    ai_result = await analyze(text)
+    for item in ai_result.findings:
+        db.add(Finding(
+            id=f"FND-{uuid4().hex[:12].upper()}",
+            case_id=document.case_id,
+            document_id=document.id,
+            rule_id=item.rule_id,
+            title=item.title,
+            severity=item.severity,
+            status="needs_review",
+            explanation=item.explanation,
+            evidence=f"{document.filename}: {item.evidence}",
+            confidence=item.confidence,
+        ))
+
     case = db.get(Case, document.case_id)
     if case:
         case.status = "needs_review"
     db.commit()
-    record(db, "document_processed", document.case_id, {"document_id": document.id, "text_extracted": bool(text.strip()), "rule_version": RULE_VERSION})
-    return {"document_id": document.id, "status": document.status, "characters_extracted": len(text), "findings_created": len(results)}
+    record(db, "document_processed", document.case_id, {"document_id": document.id, "text_extracted": bool(text.strip()), "rule_version": RULE_VERSION, "ai_status": ai_result.status, "ai_findings": len(ai_result.findings)})
+    return {"document_id": document.id, "status": document.status, "characters_extracted": len(text), "rule_findings": len(results), "ai_findings": len(ai_result.findings), "ai_status": ai_result.status}
 
 @app.get("/api/v1/cases/{case_id}/findings", response_model=list[FindingOut], dependencies=[Depends(require_demo_token)])
 def list_findings(case_id: str, db: Session = Depends(get_db)):
