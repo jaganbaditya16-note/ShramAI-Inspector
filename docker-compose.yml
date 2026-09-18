@@ -13,8 +13,9 @@ services:
   api:
     build: ./apps/api
     environment:
-      DATABASE_URL: postgresql://postgres:postgres@db:5432/shramai
+      DATABASE_URL: postgresql+psycopg://postgres:postgres@db:5432/shramai
       API_PORT: 8000
+      ALLOWED_ORIGINS: http://localhost:3000
     ports:
       - "8000:8000"
     depends_on:
